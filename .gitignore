@@ -49,3 +49,8 @@ docker-compose.override.yml
 # Vector DB data
 qdrant_data/
 pgdata/
+
+# Design & Process Docs
+claude-code-prompt.md
+task.md
+implementation_plan.md
