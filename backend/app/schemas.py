@@ -1,0 +1,111 @@
+"""Pydantic schemas for API request/response validation.
+
+Mirrors SQLAlchemy models but used for FastAPI endpoint serialization.
+"""
+
+import uuid
+from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel, Field
+
+
+# === User Schemas ===
+
+class UserCreate(BaseModel):
+    """Request schema for creating a new user."""
+    name: str = Field(..., min_length=1, max_length=100, description="Display name")
+
+
+class UserResponse(BaseModel):
+    """Response schema for user data."""
+    id: uuid.UUID
+    name: str
+    preferred_language: str
+    risk_tolerance: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# === Goal Schemas ===
+
+class GoalCreate(BaseModel):
+    """Request schema for creating a new goal."""
+    name: str = Field(..., min_length=1, max_length=200)
+    icon: str = Field(default="🎯", max_length=10)
+    target_amount: float = Field(..., gt=0, description="Target amount in RON")
+    monthly_contribution: float = Field(default=0, ge=0)
+    deadline: Optional[datetime] = None
+    priority: str = Field(default="medium")
+    notes: Optional[str] = None
+
+
+class GoalUpdate(BaseModel):
+    """Request schema for updating a goal (partial)."""
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    icon: Optional[str] = Field(None, max_length=10)
+    target_amount: Optional[float] = Field(None, gt=0)
+    monthly_contribution: Optional[float] = Field(None, ge=0)
+    deadline: Optional[datetime] = None
+    priority: Optional[str] = None
+    status: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class GoalContribute(BaseModel):
+    """Request schema for adding a contribution to a goal."""
+    amount: float = Field(..., gt=0, description="Contribution amount in RON")
+
+
+class GoalResponse(BaseModel):
+    """Response schema for goal data."""
+    id: uuid.UUID
+    user_id: uuid.UUID
+    name: str
+    icon: str
+    target_amount: float
+    saved_amount: float
+    monthly_contribution: float
+    deadline: Optional[datetime]
+    priority: str
+    status: str
+    notes: Optional[str]
+    progress_percent: float
+    remaining_amount: float
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# === Chat Schemas ===
+
+class ChatRequest(BaseModel):
+    """Request schema for chat messages."""
+    message: str = Field(..., min_length=1, description="User message")
+    user_id: uuid.UUID = Field(..., description="User identifier")
+    session_id: str = Field(default="default", description="Conversation thread ID")
+
+
+class ChatHistoryResponse(BaseModel):
+    """Response schema for a single chat message in history."""
+    role: str
+    content: str
+    timestamp: Optional[datetime] = None
+
+
+# === Document Schemas ===
+
+class DocumentInfo(BaseModel):
+    """Response schema for an indexed document."""
+    filename: str
+    chunk_count: int
+    indexed_at: Optional[datetime] = None
+
+
+class IngestResponse(BaseModel):
+    """Response schema for document ingestion."""
+    documents_processed: int
+    total_chunks: int
+    collection: str
