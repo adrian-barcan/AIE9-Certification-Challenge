@@ -17,7 +17,7 @@ export default function ChatPage() {
     const [input, setInput] = useState("");
     const [isStreaming, setIsStreaming] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const inputRef = useRef<HTMLInputElement>(null);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     const starterQuestions = [
         t("q_tezaur"),
@@ -34,6 +34,22 @@ export default function ChatPage() {
         scrollToBottom();
     }, [messages]);
 
+    // Auto-resize textarea
+    useEffect(() => {
+        if (textareaRef.current) {
+            textareaRef.current.style.height = "auto";
+            const scrollHeight = textareaRef.current.scrollHeight;
+            const maxHeight = 12 * 24; // 12 lines
+            if (scrollHeight <= maxHeight) {
+                textareaRef.current.style.height = `${Math.max(24, scrollHeight)}px`;
+                textareaRef.current.style.overflowY = "hidden";
+            } else {
+                textareaRef.current.style.height = `${maxHeight}px`;
+                textareaRef.current.style.overflowY = "auto";
+            }
+        }
+    }, [input]);
+
     const sendMessage = async (text: string) => {
         if (!text.trim() || !user || isStreaming) return;
 
@@ -42,7 +58,6 @@ export default function ChatPage() {
         setInput("");
         setIsStreaming(true);
 
-        // Add empty assistant message that we'll stream into
         setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
         try {
@@ -78,7 +93,7 @@ export default function ChatPage() {
             });
         } finally {
             setIsStreaming(false);
-            inputRef.current?.focus();
+            textareaRef.current?.focus();
         }
     };
 
@@ -91,28 +106,31 @@ export default function ChatPage() {
         sendMessage(question);
     };
 
+    const hasContent = input.trim().length > 0;
+    const userInitial = user?.name?.charAt(0).toUpperCase() || "U";
+
     return (
         <div className="flex flex-col h-full relative">
             {/* Messages area */}
-            <div className="flex-1 overflow-auto p-4 sm:p-8 scroll-smooth">
+            <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-8">
                 {messages.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full animate-fade-in max-w-2xl mx-auto text-center">
-                        <div className="w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-3xl flex items-center justify-center text-4xl shadow-xl shadow-indigo-500/20 mb-8">
+                        <div className="w-16 h-16 bg-[var(--accent)] rounded-2xl flex items-center justify-center text-3xl shadow-sm text-[var(--accent-fg)] mb-8">
                             💬
                         </div>
-                        <h2 className="text-3xl font-bold mb-3 tracking-tight text-white">
+                        <h2 className="text-2xl font-semibold mb-3 tracking-tight text-[var(--text-primary)]">
                             {t("chat_greeting")}{user ? `, ${user.name}` : ""}!
                         </h2>
-                        <div className="text-[var(--text-secondary)] text-lg mb-12 leading-relaxed whitespace-pre-line">
+                        <div className="text-[var(--text-secondary)] text-base mb-12 leading-relaxed whitespace-pre-line">
                             {t("chat_intro")}
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
                             {starterQuestions.map((q) => (
                                 <button
                                     key={q}
                                     onClick={() => handleStarterClick(q)}
-                                    className="glass-card p-5 text-sm text-left text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-indigo-500/30 hover:bg-white/5 transition-all duration-200 group"
+                                    className="p-5 text-sm text-left rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-light)] hover:shadow-sm transition-all duration-200 group h-full flex flex-col"
                                 >
                                     <span className="block mb-2 text-xl group-hover:scale-110 transition-transform duration-200 w-fit">
                                         ⚡
@@ -123,17 +141,23 @@ export default function ChatPage() {
                         </div>
                     </div>
                 ) : (
-                    <div className="max-w-3xl mx-auto space-y-6 pb-24">
+                    <div className="max-w-3xl mx-auto space-y-5 pb-32">
                         {messages.map((msg, i) => (
                             <div
                                 key={i}
-                                className={`animate-fade-in flex ${msg.role === "user" ? "justify-end" : "justify-start"
+                                className={`animate-fade-in flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"
                                     }`}
                             >
+                                {/* Assistant avatar */}
+                                {msg.role === "assistant" && (
+                                    <div className="mt-0.5 shrink-0 w-7 h-7 rounded-full bg-[var(--accent)] flex items-center justify-center text-[10px] font-bold text-[var(--accent-fg)]">
+                                        AI
+                                    </div>
+                                )}
                                 <div
-                                    className={`max-w-[85%] px-6 py-4 rounded-[2rem] text-[15px] leading-relaxed shadow-sm ${msg.role === "user"
-                                            ? "bg-indigo-600 text-white rounded-br-sm shadow-indigo-500/10"
-                                            : "glass-card rounded-bl-sm border-white/5 bg-zinc-800/50"
+                                    className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm ${msg.role === "user"
+                                        ? "bg-[var(--accent)] text-[var(--accent-fg)]"
+                                        : "bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border)]"
                                         }`}
                                 >
                                     {msg.role === "assistant" && !msg.content && isStreaming ? (
@@ -152,6 +176,12 @@ export default function ChatPage() {
                                         <div className="whitespace-pre-wrap">{msg.content}</div>
                                     )}
                                 </div>
+                                {/* User avatar */}
+                                {msg.role === "user" && (
+                                    <div className="mt-0.5 shrink-0 w-7 h-7 rounded-full bg-[var(--accent)] flex items-center justify-center text-[10px] font-bold text-[var(--accent-fg)]">
+                                        {userInitial}
+                                    </div>
+                                )}
                             </div>
                         ))}
                         <div ref={messagesEndRef} />
@@ -159,42 +189,56 @@ export default function ChatPage() {
                 )}
             </div>
 
-            {/* Input area - Floating */}
-            <div className="absolute bottom-6 left-0 right-0 px-4 pointer-events-none">
+            {/* Composer — floating at bottom */}
+            <div className="absolute bottom-0 left-0 right-0 p-4 pointer-events-none">
                 <div className="max-w-3xl mx-auto pointer-events-auto">
-                    <form
-                        onSubmit={handleSubmit}
-                        className="glass-card p-2 pl-4 rounded-full flex gap-2 shadow-2xl shadow-black/20 border-white/10 bg-[#18181b]/80 backdrop-blur-xl"
-                    >
-                        <input
-                            ref={inputRef}
-                            type="text"
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            placeholder={t("chat_input_placeholder")}
-                            disabled={isStreaming}
-                            className="flex-1 bg-transparent border-none text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none px-2 text-[15px]"
-                        />
-                        <button
-                            type="submit"
-                            disabled={!input.trim() || isStreaming}
-                            className="p-3 rounded-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:hover:bg-indigo-600 text-white transition-all duration-200 shrink-0 shadow-lg shadow-indigo-500/20"
-                        >
-                            {isStreaming ? (
-                                <span className="block w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            ) : (
-                                <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    viewBox="0 0 24 24"
-                                    fill="currentColor"
-                                    className="w-5 h-5 translate-x-0.5"
-                                >
-                                    <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
-                                </svg>
-                            )}
-                        </button>
-                    </form>
-                    <p className="text-center text-[10px] text-[var(--text-muted)] mt-3 opacity-60">
+                    <div className="flex flex-col rounded-3xl border border-[var(--border)] bg-[var(--bg-card)] shadow-sm">
+                        {/* Textarea */}
+                        <div className="flex-1 px-4 pt-4 pb-2">
+                            <textarea
+                                ref={textareaRef}
+                                value={input}
+                                onChange={(e) => setInput(e.target.value)}
+                                placeholder={t("chat_input_placeholder")}
+                                disabled={isStreaming}
+                                rows={1}
+                                className="w-full resize-none bg-transparent text-sm outline-none placeholder:text-[var(--text-muted)] min-h-[24px] leading-6 text-[var(--text-primary)]"
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter" && !e.shiftKey) {
+                                        e.preventDefault();
+                                        sendMessage(input);
+                                    }
+                                }}
+                            />
+                        </div>
+
+                        {/* Bottom toolbar */}
+                        <div className="flex items-center justify-end px-3 pb-3">
+                            <button
+                                onClick={() => sendMessage(input)}
+                                disabled={!hasContent || isStreaming}
+                                className={`inline-flex shrink-0 items-center justify-center rounded-full p-2.5 transition-colors ${hasContent
+                                    ? "bg-[var(--accent)] text-[var(--accent-fg)] hover:opacity-90"
+                                    : "bg-[var(--bg-input)] text-[var(--text-muted)] cursor-not-allowed"
+                                    }`}
+                            >
+                                {isStreaming ? (
+                                    <span className="block w-5 h-5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+                                ) : (
+                                    <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        viewBox="0 0 24 24"
+                                        fill="currentColor"
+                                        className="w-5 h-5"
+                                    >
+                                        <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
+                                    </svg>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+
+                    <p className="text-center text-[11px] text-[var(--text-muted)] mt-2">
                         {t("chat_disclaimer")}
                     </p>
                 </div>

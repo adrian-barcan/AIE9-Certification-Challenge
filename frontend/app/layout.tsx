@@ -4,6 +4,7 @@ import "./globals.css";
 import AppShell from "@/components/AppShell";
 import { UserProvider } from "@/lib/UserContext";
 import { LanguageProvider } from "@/lib/LanguageContext";
+import { ThemeProvider } from "@/lib/ThemeContext";
 
 const inter = Inter({
   variable: "--font-geist-sans",
@@ -22,13 +23,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ro">
+    <html lang="ro" className="dark">
       <body className={`${inter.variable} antialiased`}>
-        <UserProvider>
-          <LanguageProvider>
-            <AppShell>{children}</AppShell>
-          </LanguageProvider>
-        </UserProvider>
+        <ThemeProvider>
+          <UserProvider>
+            <LanguageProvider>
+              <AppShell>{children}</AppShell>
+            </LanguageProvider>
+          </UserProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

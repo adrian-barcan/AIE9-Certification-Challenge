@@ -1,37 +1,57 @@
 @import "tailwindcss";
 
+/* ─── Light Mode (default) ─── */
 :root {
-  /* Modern Slate/Zinc Dark Theme */
-  --bg-primary: #09090b;
-  /* Zinc 950 */
-  --bg-secondary: #18181b;
-  /* Zinc 900 */
-  --bg-card: rgba(24, 24, 27, 0.6);
-  --bg-input: #27272a;
-  /* Zinc 800 */
+  --bg-primary: #fafafa;        /* zinc-50 */
+  --bg-secondary: #f4f4f5;      /* zinc-100 */
+  --bg-card: #ffffff;
+  --bg-input: #f4f4f5;          /* zinc-100 */
 
-  --text-primary: #fafafa;
-  /* Zinc 50 */
-  --text-secondary: #a1a1aa;
-  /* Zinc 400 */
-  --text-muted: #71717a;
-  /* Zinc 500 */
+  --text-primary: #18181b;      /* zinc-900 */
+  --text-secondary: #71717a;    /* zinc-500 */
+  --text-muted: #a1a1aa;        /* zinc-400 */
 
-  /* Refined Accents - Indigo/Violet */
-  --accent: #6366f1;
-  --accent-hover: #4f46e5;
-  --accent-glow: rgba(99, 102, 241, 0.12);
+  --accent: #18181b;            /* zinc-900 */
+  --accent-hover: #27272a;      /* zinc-800 */
+  --accent-fg: #ffffff;
 
   --success: #10b981;
   --warning: #f59e0b;
   --danger: #ef4444;
 
-  --border: #27272a;
-  --border-light: #3f3f46;
+  --border: #e4e4e7;            /* zinc-200 */
+  --border-light: #d4d4d8;      /* zinc-300 */
 
   --radius-lg: 24px;
   --radius-md: 16px;
   --radius-sm: 12px;
+
+  color-scheme: light;
+}
+
+/* ─── Dark Mode ─── */
+.dark {
+  --bg-primary: #09090b;        /* zinc-950 */
+  --bg-secondary: #18181b;      /* zinc-900 */
+  --bg-card: #18181b;           /* zinc-900 */
+  --bg-input: #27272a;          /* zinc-800 */
+
+  --text-primary: #fafafa;      /* zinc-50 */
+  --text-secondary: #a1a1aa;    /* zinc-400 */
+  --text-muted: #71717a;        /* zinc-500 */
+
+  --accent: #ffffff;
+  --accent-hover: #e4e4e7;
+  --accent-fg: #18181b;
+
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+
+  --border: #27272a;            /* zinc-800 */
+  --border-light: #3f3f46;      /* zinc-700 */
+
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -53,7 +73,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Custom Scrollbar - Slim & Subtle */
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 5px;
 }
@@ -76,39 +96,18 @@ body {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Modern Glass Card */
+/* Card — Solid bg with subtle border, no glassmorphism */
 .glass-card {
   background: var(--bg-card);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
-/* Subtle Gradient Border */
-.gradient-border {
-  position: relative;
-  border-radius: var(--radius-lg);
-  background: var(--bg-card);
-}
-
-.gradient-border::before {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(45deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
-}
-
-/* Glow effect on focus */
+/* Focus ring */
 .glow-focus:focus {
-  box-shadow: 0 0 0 2px var(--accent-glow), 0 0 20px var(--accent-glow);
+  box-shadow: 0 0 0 2px var(--border-light);
+  border-color: var(--border-light);
 }
 
 /* Progress bar animation */
@@ -141,7 +140,6 @@ body {
 
 /* Typing indicator */
 @keyframes pulse-dot {
-
   0%,
   80%,
   100% {

@@ -23,7 +23,6 @@ export default function GoalsPage() {
     const [contributeId, setContributeId] = useState<string | null>(null);
     const [contributeAmount, setContributeAmount] = useState("");
 
-    // Form state
     const [formData, setFormData] = useState<GoalCreate>({
         name: "",
         icon: "🎯",
@@ -115,14 +114,14 @@ export default function GoalsPage() {
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold">{t("goals_title")}</h1>
+                    <h1 className="text-2xl font-bold text-[var(--text-primary)]">{t("goals_title")}</h1>
                     <p className="text-sm text-[var(--text-secondary)] mt-1">
                         {t("goals_subtitle")}
                     </p>
                 </div>
                 <button
                     onClick={() => setShowForm(!showForm)}
-                    className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-default"
+                    className="px-4 py-2.5 rounded-full bg-[var(--accent)] text-[var(--accent-fg)] text-sm font-medium transition-default hover:opacity-90"
                 >
                     {showForm ? t("modal_cancel") : t("goals_create_new")}
                 </button>
@@ -130,8 +129,8 @@ export default function GoalsPage() {
 
             {/* Create form */}
             {showForm && (
-                <div className="glass-card p-6 mb-6 animate-fade-in">
-                    <h3 className="font-semibold mb-4">{t("modal_title")}</h3>
+                <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-6 mb-6 animate-fade-in">
+                    <h3 className="font-semibold mb-4 text-[var(--text-primary)]">{t("modal_title")}</h3>
                     <form onSubmit={handleCreate} className="space-y-4">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
@@ -145,7 +144,7 @@ export default function GoalsPage() {
                                         setFormData({ ...formData, name: e.target.value })
                                     }
                                     placeholder="Ex: Mașină nouă"
-                                    className="w-full px-3 py-2.5 rounded-lg bg-[var(--bg-input)] border border-[var(--border)] text-sm focus:outline-none glow-focus transition-default"
+                                    className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-light)] transition-default"
                                     required
                                 />
                             </div>
@@ -164,7 +163,7 @@ export default function GoalsPage() {
                                     }
                                     placeholder="50000"
                                     min="1"
-                                    className="w-full px-3 py-2.5 rounded-lg bg-[var(--bg-input)] border border-[var(--border)] text-sm focus:outline-none glow-focus transition-default"
+                                    className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-light)] transition-default"
                                     required
                                 />
                             </div>
@@ -183,7 +182,7 @@ export default function GoalsPage() {
                                     }
                                     placeholder="2000"
                                     min="0"
-                                    className="w-full px-3 py-2.5 rounded-lg bg-[var(--bg-input)] border border-[var(--border)] text-sm focus:outline-none glow-focus transition-default"
+                                    className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-light)] transition-default"
                                 />
                             </div>
                             <div>
@@ -195,7 +194,7 @@ export default function GoalsPage() {
                                     onChange={(e) =>
                                         setFormData({ ...formData, priority: e.target.value })
                                     }
-                                    className="w-full px-3 py-2.5 rounded-lg bg-[var(--bg-input)] border border-[var(--border)] text-sm focus:outline-none glow-focus transition-default"
+                                    className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-light)] transition-default"
                                 >
                                     <option value="low">Scăzută</option>
                                     <option value="medium">Medie</option>
@@ -215,9 +214,9 @@ export default function GoalsPage() {
                                         key={icon}
                                         type="button"
                                         onClick={() => setFormData({ ...formData, icon })}
-                                        className={`w-10 h-10 rounded-lg text-lg flex items-center justify-center transition-default ${formData.icon === icon
-                                                ? "bg-indigo-600 ring-2 ring-indigo-400"
-                                                : "bg-[var(--bg-input)] hover:bg-[var(--border)]"
+                                        className={`w-10 h-10 rounded-xl text-lg flex items-center justify-center transition-default border ${formData.icon === icon
+                                                ? "bg-[var(--accent)] text-[var(--accent-fg)] border-[var(--accent)]"
+                                                : "bg-[var(--bg-input)] border-[var(--border)] hover:border-[var(--border-light)]"
                                             }`}
                                     >
                                         {icon}
@@ -228,7 +227,7 @@ export default function GoalsPage() {
 
                         <button
                             type="submit"
-                            className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-default"
+                            className="px-5 py-2.5 rounded-full bg-[var(--accent)] text-[var(--accent-fg)] text-sm font-medium transition-default hover:opacity-90"
                         >
                             {t("modal_create")}
                         </button>
@@ -240,7 +239,7 @@ export default function GoalsPage() {
             {goals.length === 0 ? (
                 <div className="text-center py-16 animate-fade-in">
                     <div className="text-5xl mb-4">🎯</div>
-                    <h3 className="text-lg font-medium mb-2">{t("goals_no_goals")}</h3>
+                    <h3 className="text-lg font-medium mb-2 text-[var(--text-primary)]">{t("goals_no_goals")}</h3>
                     <p className="text-sm text-[var(--text-secondary)]">
                         {t("goals_subtitle")}
                     </p>
@@ -250,20 +249,20 @@ export default function GoalsPage() {
                     {goals.map((goal) => (
                         <div
                             key={goal.id}
-                            className="glass-card p-5 animate-fade-in hover:border-[var(--border-light)] transition-default"
+                            className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-5 animate-fade-in hover:border-[var(--border-light)] transition-default shadow-sm"
                         >
                             {/* Header */}
                             <div className="flex items-start justify-between mb-3">
                                 <div className="flex items-center gap-3">
                                     <span className="text-2xl">{goal.icon}</span>
                                     <div>
-                                        <h3 className="font-semibold text-sm">{goal.name}</h3>
+                                        <h3 className="font-semibold text-sm text-[var(--text-primary)]">{goal.name}</h3>
                                         <span
                                             className={`text-xs px-2 py-0.5 rounded-full ${goal.priority === "high"
-                                                    ? "bg-red-500/20 text-red-400"
+                                                    ? "bg-red-500/10 text-red-500 dark:bg-red-500/20 dark:text-red-400"
                                                     : goal.priority === "medium"
-                                                        ? "bg-yellow-500/20 text-yellow-400"
-                                                        : "bg-green-500/20 text-green-400"
+                                                        ? "bg-yellow-500/10 text-yellow-600 dark:bg-yellow-500/20 dark:text-yellow-400"
+                                                        : "bg-green-500/10 text-green-600 dark:bg-green-500/20 dark:text-green-400"
                                                 }`}
                                         >
                                             {goal.priority === "high"
@@ -295,14 +294,14 @@ export default function GoalsPage() {
                                 </div>
                                 <div className="h-2.5 bg-[var(--bg-input)] rounded-full overflow-hidden">
                                     <div
-                                        className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 animate-progress"
+                                        className="h-full rounded-full bg-[var(--accent)] animate-progress"
                                         style={{
                                             width: `${Math.min(goal.progress_percent, 100)}%`,
                                         }}
                                     />
                                 </div>
                                 <div className="flex justify-between mt-1.5">
-                                    <span className="text-xs font-medium text-indigo-400">
+                                    <span className="text-xs font-medium text-[var(--text-primary)]">
                                         {goal.progress_percent.toFixed(0)}%
                                     </span>
                                     <span className="text-xs text-[var(--text-muted)]">
@@ -341,11 +340,11 @@ export default function GoalsPage() {
                                         placeholder="Sumă"
                                         min="1"
                                         autoFocus
-                                        className="flex-1 px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--border)] text-sm focus:outline-none glow-focus transition-default"
+                                        className="flex-1 px-3 py-2 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-light)] transition-default"
                                     />
                                     <button
                                         onClick={() => handleContribute(goal.id)}
-                                        className="px-3 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-xs font-medium transition-default"
+                                        className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition-default"
                                     >
                                         {t("goals_add_funds")}
                                     </button>
@@ -354,7 +353,7 @@ export default function GoalsPage() {
                                             setContributeId(null);
                                             setContributeAmount("");
                                         }}
-                                        className="px-3 py-2 rounded-lg bg-[var(--bg-input)] hover:bg-[var(--border)] text-sm transition-default"
+                                        className="px-3 py-2 rounded-xl bg-[var(--bg-input)] hover:bg-[var(--border)] text-sm transition-default text-[var(--text-primary)]"
                                     >
                                         ✕
                                     </button>
@@ -363,19 +362,19 @@ export default function GoalsPage() {
                                 <div className="flex gap-2">
                                     <button
                                         onClick={() => quickContribute(goal.id, 100)}
-                                        className="flex-1 py-2 rounded-lg bg-[var(--bg-input)] hover:bg-[var(--border)] text-xs transition-default"
+                                        className="flex-1 py-2 rounded-xl bg-[var(--bg-input)] hover:bg-[var(--border)] text-xs transition-default text-[var(--text-primary)] border border-[var(--border)]"
                                     >
                                         +100 RON
                                     </button>
                                     <button
                                         onClick={() => quickContribute(goal.id, 500)}
-                                        className="flex-1 py-2 rounded-lg bg-[var(--bg-input)] hover:bg-[var(--border)] text-xs transition-default"
+                                        className="flex-1 py-2 rounded-xl bg-[var(--bg-input)] hover:bg-[var(--border)] text-xs transition-default text-[var(--text-primary)] border border-[var(--border)]"
                                     >
                                         +500 RON
                                     </button>
                                     <button
                                         onClick={() => setContributeId(goal.id)}
-                                        className="flex-1 py-2 rounded-lg bg-[var(--bg-input)] hover:bg-[var(--border)] text-xs transition-default"
+                                        className="flex-1 py-2 rounded-xl bg-[var(--bg-input)] hover:bg-[var(--border)] text-xs transition-default text-[var(--text-primary)] border border-[var(--border)]"
                                     >
                                         {t("goals_custom")}
                                     </button>

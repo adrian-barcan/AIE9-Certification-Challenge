@@ -10,7 +10,7 @@ function AppContent({ children }: { children: ReactNode }) {
 
     if (loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center">
+            <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)]">
                 <div className="text-[var(--text-muted)] animate-pulse text-lg">
                     Se încarcă...
                 </div>
@@ -23,7 +23,7 @@ function AppContent({ children }: { children: ReactNode }) {
     }
 
     return (
-        <div className="flex h-screen overflow-hidden">
+        <div className="flex h-screen overflow-hidden bg-[var(--bg-primary)] text-[var(--text-primary)]">
             <Sidebar />
             <main className="flex-1 overflow-auto">{children}</main>
         </div>
@@ -32,8 +32,6 @@ function AppContent({ children }: { children: ReactNode }) {
 
 export default function AppShell({ children }: { children: ReactNode }) {
     return (
-        <UserProvider>
-            <AppContent>{children}</AppContent>
-        </UserProvider>
+        <AppContent>{children}</AppContent>
     );
 }
