@@ -31,7 +31,11 @@ async def create_user(
     Returns:
         The created user with generated UUID.
     """
-    user = User(name=data.name)
+    user = User(
+        name=data.name,
+        preferred_language=data.preferred_language,
+        risk_tolerance=data.risk_tolerance,
+    )
     db.add(user)
     await db.flush()
     await db.commit()

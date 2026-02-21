@@ -15,6 +15,8 @@ from pydantic import BaseModel, Field
 class UserCreate(BaseModel):
     """Request schema for creating a new user."""
     name: str = Field(..., min_length=1, max_length=100, description="Display name")
+    preferred_language: str = Field(default="ro", description="Preferred language (ro or en)")
+    risk_tolerance: str = Field(default="moderate", description="Risk tolerance (conservative, moderate, aggressive)")
 
 
 class UserResponse(BaseModel):
