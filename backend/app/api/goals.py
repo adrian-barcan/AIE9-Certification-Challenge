@@ -56,6 +56,7 @@ async def create_goal(
     goal = Goal(user_id=user_id, **data.model_dump())
     db.add(goal)
     await db.flush()
+    await db.commit()
     await db.refresh(goal)
     return goal
 
@@ -119,6 +120,7 @@ async def update_goal(
         setattr(goal, field, value)
 
     await db.flush()
+    await db.commit()
     await db.refresh(goal)
     return goal
 
@@ -145,6 +147,7 @@ async def delete_goal(
             detail="Goal not found",
         )
     await db.delete(goal)
+    await db.commit()
 
 
 @router.post("/{goal_id}/contribute", response_model=GoalResponse)
@@ -176,5 +179,6 @@ async def contribute_to_goal(
 
     goal.saved_amount = float(goal.saved_amount) + data.amount
     await db.flush()
+    await db.commit()
     await db.refresh(goal)
     return goal

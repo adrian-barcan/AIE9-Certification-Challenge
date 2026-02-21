@@ -1,51 +1,39 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { ingestDocuments, listDocuments, DocumentInfo } from "@/lib/api";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { ingestDocuments, listDocuments } from "@/lib/api";
 import { useLanguage } from "@/lib/LanguageContext";
 
 export default function DocumentsPage() {
+    const queryClient = useQueryClient();
     const { t } = useLanguage();
-    const [documents, setDocuments] = useState<DocumentInfo[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [ingesting, setIngesting] = useState(false);
     const [result, setResult] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    const loadDocuments = async () => {
-        try {
-            const data = await listDocuments();
-            setDocuments(data);
-        } catch {
-            // Backend might not be running
-        } finally {
-            setLoading(false);
-        }
-    };
+    const { data: documents = [], isLoading: loading } = useQuery({
+        queryKey: ["documents"],
+        queryFn: listDocuments,
+    });
 
-    useEffect(() => {
-        loadDocuments();
-    }, []);
+    const ingestMutation = useMutation({
+        mutationFn: ingestDocuments,
+        onSuccess: () => {
+            setResult(t("docs_success"));
+            queryClient.invalidateQueries({ queryKey: ["documents"] });
+        },
+        onError: (e) => {
+            setError(e instanceof Error ? e.message : t("docs_error"));
+        },
+    });
 
-    const handleIngest = async () => {
-        setIngesting(true);
+    const handleIngest = () => {
         setResult(null);
         setError(null);
-
-        try {
-            await ingestDocuments();
-            setResult(t("docs_success"));
-            loadDocuments();
-        } catch (e) {
-            setError(
-                e instanceof Error
-                    ? e.message
-                    : t("docs_error")
-            );
-        } finally {
-            setIngesting(false);
-        }
+        ingestMutation.mutate();
     };
+
+    const isIngesting = ingestMutation.isPending;
 
     return (
         <div className="p-6 max-w-2xl mx-auto">
@@ -68,10 +56,10 @@ export default function DocumentsPage() {
                     </div>
                     <button
                         onClick={handleIngest}
-                        disabled={ingesting}
+                        disabled={isIngesting}
                         className="px-5 py-2.5 rounded-full bg-[var(--accent)] text-[var(--accent-fg)] text-sm font-medium transition-default hover:opacity-90 disabled:opacity-50 shrink-0"
                     >
-                        {ingesting ? (
+                        {isIngesting ? (
                             <span className="flex items-center gap-2">
                                 <span className="animate-spin">⏳</span> {t("docs_ingest_processing")}
                             </span>

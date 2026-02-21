@@ -5,6 +5,7 @@ import AppShell from "@/components/AppShell";
 import { UserProvider } from "@/lib/UserContext";
 import { LanguageProvider } from "@/lib/LanguageContext";
 import { ThemeProvider } from "@/lib/ThemeContext";
+import Providers from "./providers";
 
 const inter = Inter({
   variable: "--font-geist-sans",
@@ -26,11 +27,13 @@ export default function RootLayout({
     <html lang="ro" className="dark">
       <body className={`${inter.variable} antialiased`}>
         <ThemeProvider>
-          <UserProvider>
-            <LanguageProvider>
-              <AppShell>{children}</AppShell>
-            </LanguageProvider>
-          </UserProvider>
+          <Providers>
+            <UserProvider>
+              <LanguageProvider>
+                <AppShell>{children}</AppShell>
+              </LanguageProvider>
+            </UserProvider>
+          </Providers>
         </ThemeProvider>
       </body>
     </html>

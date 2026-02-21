@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useUser } from "@/lib/UserContext";
 import { useLanguage } from "@/lib/LanguageContext";
 import {
@@ -16,9 +17,9 @@ const ICONS = ["🎯", "🚗", "🏖️", "🏠", "🛡️", "💰", "📚", "�
 
 export default function GoalsPage() {
     const { user } = useUser();
+    const queryClient = useQueryClient();
     const { t } = useLanguage();
-    const [goals, setGoals] = useState<Goal[]>([]);
-    const [loading, setLoading] = useState(true);
+
     const [showForm, setShowForm] = useState(false);
     const [contributeId, setContributeId] = useState<string | null>(null);
     const [contributeAmount, setContributeAmount] = useState("");
@@ -31,28 +32,16 @@ export default function GoalsPage() {
         priority: "medium",
     });
 
-    const loadGoals = useCallback(async () => {
-        if (!user) return;
-        try {
-            const data = await listGoals(user.id);
-            setGoals(data);
-        } catch {
-            // Backend might not be running
-        } finally {
-            setLoading(false);
-        }
-    }, [user]);
+    const { data: goals = [], isLoading: loading } = useQuery({
+        queryKey: ["goals", user?.id],
+        queryFn: () => listGoals(user!.id),
+        enabled: !!user?.id,
+    });
 
-    useEffect(() => {
-        loadGoals();
-    }, [loadGoals]);
-
-    const handleCreate = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!user || !formData.name || !formData.target_amount) return;
-
-        try {
-            await createGoal(user.id, formData);
+    const createMutation = useMutation({
+        mutationFn: (data: GoalCreate) => createGoal(user!.id, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["goals", user?.id] });
             setShowForm(false);
             setFormData({
                 name: "",
@@ -61,42 +50,39 @@ export default function GoalsPage() {
                 monthly_contribution: 0,
                 priority: "medium",
             });
-            loadGoals();
-        } catch {
-            // Handle error
-        }
-    };
+        },
+    });
 
-    const handleDelete = async (goalId: string) => {
-        try {
-            await deleteGoal(goalId);
-            loadGoals();
-        } catch {
-            // Handle error
-        }
-    };
+    const deleteMutation = useMutation({
+        mutationFn: deleteGoal,
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ["goals", user?.id] }),
+    });
 
-    const handleContribute = async (goalId: string) => {
-        const amount = parseFloat(contributeAmount);
-        if (!amount || amount <= 0) return;
-
-        try {
-            await contributeToGoal(goalId, amount);
+    const contributeMutation = useMutation({
+        mutationFn: ({ id, amount }: { id: string; amount: number }) => contributeToGoal(id, amount),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["goals", user?.id] });
             setContributeId(null);
             setContributeAmount("");
-            loadGoals();
-        } catch {
-            // Handle error
-        }
+        },
+    });
+
+    const handleCreate = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!user || !formData.name || !formData.target_amount) return;
+        createMutation.mutate(formData);
     };
 
-    const quickContribute = async (goalId: string, amount: number) => {
-        try {
-            await contributeToGoal(goalId, amount);
-            loadGoals();
-        } catch {
-            // Handle error
-        }
+    const handleDelete = (goalId: string) => deleteMutation.mutate(goalId);
+
+    const handleContribute = (goalId: string) => {
+        const amount = parseFloat(contributeAmount);
+        if (!amount || amount <= 0) return;
+        contributeMutation.mutate({ id: goalId, amount });
+    };
+
+    const quickContribute = (goalId: string, amount: number) => {
+        contributeMutation.mutate({ id: goalId, amount });
     };
 
     if (loading) {
@@ -215,8 +201,8 @@ export default function GoalsPage() {
                                         type="button"
                                         onClick={() => setFormData({ ...formData, icon })}
                                         className={`w-10 h-10 rounded-xl text-lg flex items-center justify-center transition-default border ${formData.icon === icon
-                                                ? "bg-[var(--accent)] text-[var(--accent-fg)] border-[var(--accent)]"
-                                                : "bg-[var(--bg-input)] border-[var(--border)] hover:border-[var(--border-light)]"
+                                            ? "bg-[var(--accent)] text-[var(--accent-fg)] border-[var(--accent)]"
+                                            : "bg-[var(--bg-input)] border-[var(--border)] hover:border-[var(--border-light)]"
                                             }`}
                                     >
                                         {icon}
@@ -259,10 +245,10 @@ export default function GoalsPage() {
                                         <h3 className="font-semibold text-sm text-[var(--text-primary)]">{goal.name}</h3>
                                         <span
                                             className={`text-xs px-2 py-0.5 rounded-full ${goal.priority === "high"
-                                                    ? "bg-red-500/10 text-red-500 dark:bg-red-500/20 dark:text-red-400"
-                                                    : goal.priority === "medium"
-                                                        ? "bg-yellow-500/10 text-yellow-600 dark:bg-yellow-500/20 dark:text-yellow-400"
-                                                        : "bg-green-500/10 text-green-600 dark:bg-green-500/20 dark:text-green-400"
+                                                ? "bg-red-500/10 text-red-500 dark:bg-red-500/20 dark:text-red-400"
+                                                : goal.priority === "medium"
+                                                    ? "bg-yellow-500/10 text-yellow-600 dark:bg-yellow-500/20 dark:text-yellow-400"
+                                                    : "bg-green-500/10 text-green-600 dark:bg-green-500/20 dark:text-green-400"
                                                 }`}
                                         >
                                             {goal.priority === "high"

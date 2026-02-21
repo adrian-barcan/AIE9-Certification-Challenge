@@ -34,6 +34,7 @@ async def create_user(
     user = User(name=data.name)
     db.add(user)
     await db.flush()
+    await db.commit()
     await db.refresh(user)
     return user
 
