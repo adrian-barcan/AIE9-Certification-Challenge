@@ -23,15 +23,23 @@ async def lifespan(app: FastAPI):
 
     Startup:
         - Creates database tables via create_all().
-        - Future: initialize RAG service, load models.
+        - Intializes LangGraph agent and Postgres checkpointer.
 
     Shutdown:
-        - Future: cleanup connections.
+        - Closes agent checkpointer connections.
     """
     logger.info("Starting Financial Agent API...")
     await create_tables()
     logger.info("Database tables created.")
+    
+    # Initialize Langgraph checkpointer
+    from app.services.agent_service import agent_service
+    await agent_service.setup()
+    logger.info("Agent service initialized.")
+    
     yield
+    
+    await agent_service.close()
     logger.info("Shutting down Financial Agent API.")
 
 

@@ -7,8 +7,10 @@ The user_id is stored in the frontend's localStorage and sent with every request
 import uuid
 from datetime import datetime
 
+from typing import List
+
 from sqlalchemy import String, DateTime
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.database import Base
@@ -43,6 +45,9 @@ class User(Base):
         default="moderate",
         nullable=False,
     )
+
+    # Relationships
+    chat_sessions: Mapped[List["ChatSession"]] = relationship("ChatSession", back_populates="user", cascade="all, delete-orphan")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

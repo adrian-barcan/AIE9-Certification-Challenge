@@ -88,6 +88,28 @@ class ChatRequest(BaseModel):
     session_id: str = Field(default="default", description="Conversation thread ID")
 
 
+class ChatSessionCreate(BaseModel):
+    """Request schema for creating a chat session."""
+    user_id: uuid.UUID
+    title: str = Field(default="New Conversation", max_length=200)
+
+
+class ChatSessionUpdate(BaseModel):
+    """Request schema for updating a chat session."""
+    title: str = Field(..., max_length=200)
+
+
+class ChatSessionResponse(BaseModel):
+    """Response schema for chat session data."""
+    id: str
+    user_id: uuid.UUID
+    title: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class ChatHistoryResponse(BaseModel):
     """Response schema for a single chat message in history."""
     role: str

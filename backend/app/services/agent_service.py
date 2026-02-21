@@ -27,10 +27,11 @@ from langchain_core.messages import (
 )
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from langgraph.store.postgres.aio import AsyncPostgresStore
 from langgraph.graph import END, StateGraph, add_messages
 from langgraph.prebuilt import create_react_agent
-from langgraph.store.memory import InMemoryStore
+from psycopg_pool import AsyncConnectionPool
 from tavily import AsyncTavilyClient
 
 from app.config import settings
@@ -219,9 +220,9 @@ class AgentService:
 
     Builds and manages the financial agent graph with:
     - A supervisor node (GPT-4o) that routes to specialist tools
-    - Short-term memory via MemorySaver (conversation context)
-    - Long-term memory via InMemoryStore (user preferences)
-    - Semantic memory via InMemoryStore (learned financial facts)
+    - Short-term memory via AsyncPostgresSaver (conversation context)
+    - Long-term memory via AsyncPostgresStore (user preferences)
+    - Semantic memory via AsyncPostgresStore (learned financial facts)
 
     Attributes:
         llm: The supervisor LLM (GPT-4o).
@@ -231,25 +232,49 @@ class AgentService:
     """
 
     def __init__(self) -> None:
-        """Initialize the agent service with LLM, memory, and graph."""
+        """Initialize the agent service with LLM layer."""
         self.llm = ChatOpenAI(
             model=settings.supervisor_model,
             api_key=settings.openai_api_key,
             temperature=0.3,
             streaming=True,
         )
-        # Memory
-        self.checkpointer = MemorySaver()  # Short-term (thread-based)
-        self.store = InMemoryStore()  # Long-term + semantic
+        self.tools = [rag_query, market_search, goals_summary, create_goal]
+        self.pool = None
+        self.checkpointer = None
+        self.store = None
+        self.graph = None
+
+    async def setup(self) -> None:
+        """Initialize async Postgres connection pool, checkpointer, and store."""
+        db_uri = settings.database_url.replace("+asyncpg", "")
+        self.pool = AsyncConnectionPool(
+            conninfo=db_uri,
+            max_size=20,
+            kwargs={"autocommit": True, "prepare_threshold": 0},
+        )
+        # pool.open() not needed explicitly in AsyncConnectionPool as it opens on wait() or first use
+        await self.pool.wait()
+
+        self.checkpointer = AsyncPostgresSaver(self.pool)
+        self.store = AsyncPostgresStore(self.pool)
+
+        # Setup tables for LangGraph checkpointer and store
+        await self.checkpointer.setup()
+        await self.store.setup()
 
         # Build the agent graph
-        self.tools = [rag_query, market_search, goals_summary, create_goal]
         self.graph = create_react_agent(
             model=self.llm,
             tools=self.tools,
             checkpointer=self.checkpointer,
             store=self.store,
         )
+
+    async def close(self) -> None:
+        """Close connection pool cleanly."""
+        if self.pool:
+            await self.pool.close()
 
     async def _get_user_context(self, user_id: str) -> str:
         """Build user context from long-term and semantic memory.

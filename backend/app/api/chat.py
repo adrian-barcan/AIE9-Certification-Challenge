@@ -7,10 +7,15 @@ Supports streaming responses via Server-Sent Events (SSE).
 import json
 import logging
 
-from fastapi import APIRouter
+import uuid
+from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.schemas import ChatRequest
+from app.database import get_db
+from app.models.chat import ChatSession
+from app.schemas import ChatRequest, ChatSessionCreate, ChatSessionResponse, ChatSessionUpdate
 from app.services.agent_service import agent_service
 
 logger = logging.getLogger(__name__)
@@ -90,3 +95,56 @@ async def get_chat_history(session_id: str) -> list:
         List of messages in the conversation.
     """
     return await agent_service.get_history(session_id)
+
+
+@router.get("/sessions/{user_id}", response_model=list[ChatSessionResponse])
+async def get_chat_sessions(user_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    """Get all chat sessions for a specific user."""
+    result = await db.execute(
+        select(ChatSession).where(ChatSession.user_id == user_id).order_by(ChatSession.updated_at.desc())
+    )
+    return result.scalars().all()
+
+
+@router.post("/sessions", response_model=ChatSessionResponse)
+async def create_chat_session(data: ChatSessionCreate, db: AsyncSession = Depends(get_db)):
+    """Create a new chat session for a user."""
+    session_id = str(uuid.uuid4())
+    new_session = ChatSession(
+        id=session_id,
+        user_id=data.user_id,
+        title=data.title,
+    )
+    db.add(new_session)
+    await db.commit()
+    await db.refresh(new_session)
+    return new_session
+
+
+@router.patch("/sessions/{session_id}", response_model=ChatSessionResponse)
+async def update_chat_session(session_id: str, data: ChatSessionUpdate, db: AsyncSession = Depends(get_db)):
+    """Update a chat session (e.g. title)."""
+    result = await db.execute(select(ChatSession).where(ChatSession.id == session_id))
+    session = result.scalars().first()
+    
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+        
+    session.title = data.title
+    await db.commit()
+    await db.refresh(session)
+    return session
+
+
+@router.delete("/sessions/{session_id}")
+async def delete_chat_session(session_id: str, db: AsyncSession = Depends(get_db)):
+    """Delete a chat session."""
+    result = await db.execute(select(ChatSession).where(ChatSession.id == session_id))
+    session = result.scalars().first()
+    
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+        
+    await db.delete(session)
+    await db.commit()
+    return {"status": "deleted"}

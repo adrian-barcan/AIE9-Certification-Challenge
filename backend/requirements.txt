@@ -35,3 +35,7 @@ jupyter>=1.0.0
 # === Utilities ===
 python-dotenv==1.0.1
 httpx==0.27.2
+
+# === Store & Memory Persistence ===
+langgraph-checkpoint-postgres
+psycopg[binary,pool]
