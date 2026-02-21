@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useUser } from "@/lib/UserContext";
 import { useLanguage } from "@/lib/LanguageContext";
+import Image from "next/image";
 import {
     listGoals,
     createGoal,
@@ -66,6 +67,10 @@ export default function GoalsPage() {
             setContributeAmount("");
         },
     });
+
+    useEffect(() => {
+        document.title = `${t("nav_goals")} | BaniWise`;
+    }, [t]);
 
     const handleCreate = (e: React.FormEvent) => {
         e.preventDefault();
@@ -130,7 +135,7 @@ export default function GoalsPage() {
                                         setFormData({ ...formData, name: e.target.value })
                                     }
                                     placeholder="Ex: Mașină nouă"
-                                    className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-light)] transition-default"
+                                    className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20 transition-default"
                                     required
                                 />
                             </div>
@@ -149,7 +154,7 @@ export default function GoalsPage() {
                                     }
                                     placeholder="50000"
                                     min="1"
-                                    className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-light)] transition-default"
+                                    className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20 transition-default"
                                     required
                                 />
                             </div>
@@ -168,7 +173,7 @@ export default function GoalsPage() {
                                     }
                                     placeholder="2000"
                                     min="0"
-                                    className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-light)] transition-default"
+                                    className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20 transition-default"
                                 />
                             </div>
                             <div>
@@ -180,7 +185,7 @@ export default function GoalsPage() {
                                     onChange={(e) =>
                                         setFormData({ ...formData, priority: e.target.value })
                                     }
-                                    className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-light)] transition-default"
+                                    className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20 transition-default"
                                 >
                                     <option value="low">Scăzută</option>
                                     <option value="medium">Medie</option>
@@ -224,7 +229,9 @@ export default function GoalsPage() {
             {/* Goals grid */}
             {goals.length === 0 ? (
                 <div className="text-center py-16 animate-fade-in">
-                    <div className="text-5xl mb-4">🎯</div>
+                    <div className="mb-6 flex justify-center">
+                        <Image src="/goals_icon.png" alt="Obiective" width={80} height={80} className="rounded-2xl shadow-sm" />
+                    </div>
                     <h3 className="text-lg font-medium mb-2 text-[var(--text-primary)]">{t("goals_no_goals")}</h3>
                     <p className="text-sm text-[var(--text-secondary)]">
                         {t("goals_subtitle")}
@@ -326,7 +333,7 @@ export default function GoalsPage() {
                                         placeholder="Sumă"
                                         min="1"
                                         autoFocus
-                                        className="flex-1 px-3 py-2 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-light)] transition-default"
+                                        className="flex-1 px-3 py-2 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20 transition-default"
                                     />
                                     <button
                                         onClick={() => handleContribute(goal.id)}

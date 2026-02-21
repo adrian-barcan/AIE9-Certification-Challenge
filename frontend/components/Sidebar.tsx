@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useUser } from "@/lib/UserContext";
 import { useLanguage } from "@/lib/LanguageContext";
 import { useTheme } from "@/lib/ThemeContext";
+import Image from "next/image";
 
 export default function Sidebar() {
     const pathname = usePathname();
@@ -17,23 +18,21 @@ export default function Sidebar() {
     };
 
     const navItems = [
-        { href: "/chat", icon: "💬", label: t("nav_chat") },
-        { href: "/goals", icon: "🎯", label: t("nav_goals") },
-        { href: "/documents", icon: "📄", label: t("nav_documents") },
+        { href: "/chat", icon: <Image src="/chat_icon.png" alt="Chat" width={22} height={22} />, label: t("nav_chat") },
+        { href: "/goals", icon: <Image src="/goals_icon.png" alt="Goals" width={22} height={22} />, label: t("nav_goals") },
+        { href: "/documents", icon: <Image src="/docs_icon.png" alt="Documents" width={22} height={22} />, label: t("nav_documents") },
     ];
 
     return (
-        <aside className="w-80 h-screen shrink-0 flex flex-col border-r border-[var(--border)] bg-[var(--bg-card)]">
+        <aside className="w-72 md:w-64 h-full shrink-0 flex flex-col border-r border-[var(--border)] bg-[var(--bg-card)] shadow-lg md:shadow-none">
             {/* Logo */}
             <div className="p-6 border-b border-[var(--border)]">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 bg-[var(--accent)] rounded-xl flex items-center justify-center text-lg shadow-sm text-[var(--accent-fg)]">
-                            🏦
-                        </div>
+                        <Image src="/logo.png" alt="BaniWise Logo" width={40} height={40} className="rounded-xl shadow-sm" />
                         <div>
                             <h1 className="text-sm font-semibold tracking-tight text-[var(--text-primary)]">
-                                FinBot
+                                BaniWise
                             </h1>
                             <p className="text-xs text-[var(--text-secondary)]">
                                 {t("app_subtitle")}
@@ -76,12 +75,12 @@ export default function Sidebar() {
                             key={item.href}
                             href={item.href}
                             className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 group ${isActive
-                                    ? "bg-[var(--accent)] text-[var(--accent-fg)] shadow-sm"
-                                    : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
+                                ? "bg-[var(--accent)] text-[var(--accent-fg)] shadow-sm"
+                                : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
                                 }`}
                         >
                             <span
-                                className={`text-lg transition-transform duration-200 ${isActive ? "scale-110" : "group-hover:scale-110"
+                                className={`transition-transform duration-200 flex items-center justify-center ${isActive ? "scale-110" : "group-hover:scale-110"
                                     }`}
                             >
                                 {item.icon}

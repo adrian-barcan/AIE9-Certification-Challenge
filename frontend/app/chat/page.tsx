@@ -6,6 +6,7 @@ import { useLanguage } from "@/lib/LanguageContext";
 import { sendMessageStream, getChatSessions, getChatHistory, createChatSession, deleteChatSession, updateChatSession, ChatSession } from "@/lib/api";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import Image from "next/image";
 
 interface Message {
     role: "user" | "assistant";
@@ -18,6 +19,10 @@ export default function ChatPage() {
 
     const [sessions, setSessions] = useState<ChatSession[]>([]);
     const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+
+    useEffect(() => {
+        document.title = `${t("nav_chat")} | BaniWise`;
+    }, [t]);
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState("");
     const [isStreaming, setIsStreaming] = useState(false);
@@ -58,8 +63,11 @@ export default function ChatPage() {
     }, [input]);
 
     // Initialize Sessions
+    const isInitializingRef = useRef(false);
+
     useEffect(() => {
-        if (user) {
+        if (user && !isInitializingRef.current) {
+            isInitializingRef.current = true;
             getChatSessions(user.id).then(data => {
                 setSessions(data);
                 if (data.length > 0) {
@@ -67,7 +75,10 @@ export default function ChatPage() {
                 } else {
                     createNewSession();
                 }
-            }).catch(err => console.error("Failed to load sessions:", err));
+            }).catch(err => {
+                console.error("Failed to load sessions:", err);
+                isInitializingRef.current = false;
+            });
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user]);
@@ -207,7 +218,7 @@ export default function ChatPage() {
     return (
         <div className="flex h-full w-full">
             {/* Sessions Sidebar */}
-            <div className="w-64 border-r border-[var(--border)] bg-[var(--bg-card)] hidden md:flex flex-col shrink-0">
+            <div className="w-64 border-r border-[var(--border)] bg-[var(--bg-card)] hidden lg:flex flex-col shrink-0">
                 <div className="p-4 border-b border-[var(--border)] flex justify-between items-center bg-[var(--bg-card)]">
                     <h3 className="font-semibold text-sm text-[var(--text-primary)]">Chat History</h3>
                     <button onClick={createNewSession} className="text-[var(--accent)] hover:bg-[var(--bg-input)] p-1.5 rounded-lg transition-colors border border-[var(--border)] shadow-sm bg-[var(--bg-card)]" title="New Chat">
@@ -253,8 +264,8 @@ export default function ChatPage() {
                         </div>
                     ) : messages.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full animate-fade-in max-w-2xl mx-auto text-center">
-                            <div className="w-16 h-16 bg-[var(--accent)] rounded-2xl flex items-center justify-center text-3xl shadow-sm text-[var(--accent-fg)] mb-8">
-                                💬
+                            <div className="mx-auto mb-8 flex items-center justify-center">
+                                <Image src="/chat_icon.png" alt="Chat BaniWise" width={64} height={64} className="rounded-2xl shadow-sm" />
                             </div>
                             <h2 className="text-2xl font-semibold mb-3 tracking-tight text-[var(--text-primary)]">
                                 {t("chat_greeting")}{user ? `, ${user.name}` : ""}!
@@ -270,16 +281,16 @@ export default function ChatPage() {
                                         onClick={() => handleStarterClick(q)}
                                         className="p-5 text-sm text-left rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-light)] hover:shadow-sm transition-all duration-200 group h-full flex flex-col"
                                     >
-                                        <span className="block mb-2 text-xl group-hover:scale-110 transition-transform duration-200 w-fit">
-                                            ⚡
-                                        </span>
+                                        <div className="mb-3 group-hover:scale-110 transition-transform duration-200">
+                                            <Image src="/lightning_icon.png" alt="Suggestion" width={24} height={24} className="rounded-md" />
+                                        </div>
                                         {q}
                                     </button>
                                 ))}
                             </div>
                         </div>
                     ) : (
-                        <div className="max-w-3xl mx-auto space-y-5 pb-32">
+                        <div className="max-w-3xl mx-auto space-y-5 pb-40 md:pb-32">
                             {messages.map((msg, i) => (
                                 <div
                                     key={i}
@@ -332,9 +343,9 @@ export default function ChatPage() {
                 </div>
 
                 {/* Composer — floating at bottom */}
-                <div className="absolute bottom-0 left-0 right-0 p-4 pointer-events-none">
+                <div className="absolute bottom-0 left-0 right-0 p-3 pb-6 md:p-4 pointer-events-none">
                     <div className="max-w-3xl mx-auto pointer-events-auto">
-                        <div className="flex flex-col rounded-3xl border border-[var(--border)] bg-[var(--bg-card)] shadow-sm">
+                        <div className="flex flex-col rounded-3xl border border-[var(--border)] bg-[var(--bg-card)] shadow-sm focus-within:border-[var(--accent)] focus-within:ring-2 focus-within:ring-[var(--accent)]/20 transition-all duration-200">
                             {/* Textarea */}
                             <div className="flex-1 px-4 pt-4 pb-2">
                                 <textarea

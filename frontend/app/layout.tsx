@@ -13,9 +13,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "FinBot — Asistent Financiar Personal",
-  description:
-    "Agent financiar AI pentru investitori din România. RAG pe documente reglementare, obiective financiare, și date live de piață.",
+  title: "BaniWise — Asistent Financiar Personal",
+  description: "Aplicația ta de bugetare și sfaturi financiare inteligente.",
 };
 
 export default function RootLayout({

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useUser } from "@/lib/UserContext";
 import { useLanguage } from "@/lib/LanguageContext";
+import Image from "next/image";
 
 export default function UserSetup() {
     const { setUserName } = useUser();
@@ -29,8 +30,8 @@ export default function UserSetup() {
     return (
         <div className="min-h-screen flex items-center justify-center p-4 bg-[var(--bg-primary)]">
             <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-3xl p-10 w-full max-w-md animate-fade-in text-center shadow-sm">
-                <div className="w-14 h-14 bg-[var(--accent)] rounded-2xl mx-auto mb-8 flex items-center justify-center text-2xl shadow-sm text-[var(--accent-fg)]">
-                    🏦
+                <div className="mx-auto mb-8 flex items-center justify-center">
+                    <Image src="/logo.png" alt="BaniWise Logo" width={64} height={64} className="rounded-2xl shadow-sm" />
                 </div>
 
                 <h1 className="text-3xl font-bold mb-3 tracking-tight text-[var(--text-primary)]">
@@ -48,7 +49,7 @@ export default function UserSetup() {
                         onChange={(e) => setName(e.target.value)}
                         placeholder={t("name_placeholder")}
                         autoFocus
-                        className="w-full px-5 py-4 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-light)] focus:ring-2 focus:ring-[var(--border)] transition-all duration-200 text-lg text-center"
+                        className="w-full px-5 py-4 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20 transition-all duration-200 text-lg text-center"
                     />
 
                     {error && (

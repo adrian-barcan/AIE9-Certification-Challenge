@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ingestDocuments, listDocuments } from "@/lib/api";
 import { useLanguage } from "@/lib/LanguageContext";
+import Image from "next/image";
 
 export default function DocumentsPage() {
     const queryClient = useQueryClient();
@@ -35,6 +36,10 @@ export default function DocumentsPage() {
 
     const isIngesting = ingestMutation.isPending;
 
+    useEffect(() => {
+        document.title = `${t("nav_documents")} | BaniWise`;
+    }, [t]);
+
     return (
         <div className="p-6 max-w-2xl mx-auto">
             <div className="mb-6">
@@ -47,7 +52,7 @@ export default function DocumentsPage() {
             {/* Ingest button */}
             <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-6 mb-6 shadow-sm">
                 <div className="flex items-center gap-4">
-                    <div className="text-3xl">📄</div>
+                    <Image src="/docs_icon.png" alt="Documente" width={40} height={40} className="rounded-xl shadow-sm" />
                     <div className="flex-1">
                         <h3 className="font-medium text-sm text-[var(--text-primary)]">{t("docs_ingest_button")}</h3>
                         <p className="text-xs text-[var(--text-secondary)] mt-0.5">
