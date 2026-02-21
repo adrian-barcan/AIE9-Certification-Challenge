@@ -20,7 +20,7 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_cohere import CohereRerank
 from langchain.retrievers import ContextualCompressionRetriever
-from qdrant_client import QdrantClient
+from qdrant_client import QdrantClient, models
 from langchain_qdrant import QdrantVectorStore
 
 from app.config import settings
@@ -114,7 +114,34 @@ class RAGService:
         if not pdf_files:
             raise ValueError(f"No PDF files found in {folder_path}")
 
-        logger.info(f"Found {len(pdf_files)} PDF files to ingest")
+        # Check which files already exist in Qdrant to avoid re-embedding
+        existing_files = set()
+        try:
+            scroll_res, _ = self._qdrant_client.scroll(
+                collection_name=settings.qdrant_collection,
+                scroll_filter=models.Filter(),
+                limit=10000,
+                with_payload=["source_file"],
+                with_vectors=False
+            )
+            for point in scroll_res:
+                source = point.payload.get("source_file")
+                if source:
+                    existing_files.add(source)
+        except Exception:
+            pass # Collection might not exist yet
+
+        pdf_files = [f for f in pdf_files if os.path.basename(f) not in existing_files]
+
+        if not pdf_files:
+            logger.info("No new PDF files to ingest.")
+            return {
+                "documents_processed": 0,
+                "total_chunks": 0,
+                "collection": settings.qdrant_collection,
+            }
+
+        logger.info(f"Found {len(pdf_files)} new PDF files to ingest")
 
         # Load and chunk all documents
         all_chunks: list[Document] = []
@@ -142,7 +169,7 @@ class RAGService:
             embedding=self.embeddings,
             url=f"http://{settings.qdrant_host}:{settings.qdrant_port}",
             collection_name=settings.qdrant_collection,
-            force_recreate=True,  # Recreate collection on each ingestion
+            force_recreate=False,  # Add incrementally, do not recreate
         )
 
         summary = {

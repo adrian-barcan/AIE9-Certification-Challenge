@@ -8,6 +8,7 @@ import json
 import logging
 
 import uuid
+import traceback
 from sqlalchemy import select
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -48,6 +49,7 @@ async def chat(data: ChatRequest) -> StreamingResponse:
             yield f"data: {json.dumps({'done': True})}\n\n"
         except Exception as e:
             logger.error(f"Chat stream error: {e}")
+            logger.error(traceback.format_exc())
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
     return StreamingResponse(

@@ -24,6 +24,7 @@ from langchain_core.messages import (
     BaseMessage,
     HumanMessage,
     SystemMessage,
+    RemoveMessage,
 )
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
@@ -352,9 +353,22 @@ class AgentService:
             }
         }
 
+        # Truncate history to avoid token overflow
+        try:
+            state = await self.graph.aget_state(config)
+            existing_messages = state.values.get("messages", [])
+        except Exception:
+            existing_messages = []
+
+        trim_messages = []
+        if len(existing_messages) > 10:
+            for m in existing_messages[:-10]:
+                if hasattr(m, "id") and m.id and not str(m.id).startswith("sys_"):
+                    trim_messages.append(RemoveMessage(id=m.id))
+
         input_messages = {
-            "messages": [
-                SystemMessage(content=system_prompt),
+            "messages": trim_messages + [
+                SystemMessage(content=system_prompt, id=f"sys_{user_id}"),
                 HumanMessage(content=message),
             ]
         }
@@ -394,9 +408,22 @@ class AgentService:
             }
         }
 
+        # Truncate history to avoid token overflow
+        try:
+            state = await self.graph.aget_state(config)
+            existing_messages = state.values.get("messages", [])
+        except Exception:
+            existing_messages = []
+
+        trim_messages = []
+        if len(existing_messages) > 10:
+            for m in existing_messages[:-10]:
+                if hasattr(m, "id") and m.id and not str(m.id).startswith("sys_"):
+                    trim_messages.append(RemoveMessage(id=m.id))
+
         input_messages = {
-            "messages": [
-                SystemMessage(content=system_prompt),
+            "messages": trim_messages + [
+                SystemMessage(content=system_prompt, id=f"sys_{user_id}"),
                 HumanMessage(content=message),
             ]
         }

@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from "react";
 import { useUser } from "@/lib/UserContext";
 import { useLanguage } from "@/lib/LanguageContext";
 import { sendMessageStream, getChatSessions, getChatHistory, createChatSession, deleteChatSession, updateChatSession, ChatSession } from "@/lib/api";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface Message {
     role: "user" | "assistant";
@@ -309,7 +311,11 @@ export default function ChatPage() {
                                                 />
                                             </div>
                                         ) : (
-                                            <div className="whitespace-pre-wrap">{msg.content}</div>
+                                            <div className="prose dark:prose-invert prose-sm max-w-none break-words">
+                                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                                    {msg.content}
+                                                </ReactMarkdown>
+                                            </div>
                                         )}
                                     </div>
                                     {/* User avatar */}
