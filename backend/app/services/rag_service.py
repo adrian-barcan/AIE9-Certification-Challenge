@@ -12,14 +12,17 @@ Usage:
 
 import logging
 import os
+import pickle
 from typing import Optional
 
 from langchain_community.document_loaders import PyMuPDFLoader
+from langchain_community.retrievers import BM25Retriever
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_cohere import CohereRerank
-from langchain.retrievers import ContextualCompressionRetriever
+from langchain.retrievers import ContextualCompressionRetriever, ParentDocumentRetriever, EnsembleRetriever
+from langchain.storage import InMemoryStore
 from qdrant_client import QdrantClient, models
 from langchain_qdrant import QdrantVectorStore
 
@@ -29,51 +32,58 @@ logger = logging.getLogger(__name__)
 
 
 class RAGService:
-    """RAG pipeline for Romanian financial documents.
+    """Advanced RAG pipeline for Romanian financial documents.
 
-    Handles the full lifecycle: load PDFs → chunk → embed → store in Qdrant → retrieve → rerank.
+    Handles the full lifecycle: load PDFs → Parent/Child chunking → store in Qdrant (child) & Memory (parent) 
+    → retrieval via Ensemble (BM25 + Vector) → Cohere rerank.
 
-    Architecture follows AIE9 patterns:
-    - Session 2: OpenAI embeddings (text-embedding-3-small)
-    - Session 4: RecursiveCharacterTextSplitter + Qdrant vector store
-    - Session 10: Cohere reranking for improved precision
+    Architecture follows AIE9 Session 11 (Advanced Retrieval):
+    - ParentDocumentRetriever (small-to-big retrieval)
+    - BM25Retriever (exact keyword matching)
+    - EnsembleRetriever (combining dense and sparse)
+    - CohereRerank (contextual compression)
 
     Attributes:
         embeddings: OpenAI embedding model instance.
-        text_splitter: Chunking strategy for documents.
+        parent_splitter: Chunking strategy for parent documents.
+        child_splitter: Chunking strategy for child documents.
         vector_store: Qdrant vector store for similarity search.
+        docstore: InMemoryStore for parent documents.
+        bm25_retriever: BM25 keyword retriever.
         reranker: Cohere reranking model for improved retrieval.
     """
 
     def __init__(self) -> None:
-        """Initialize RAG service components."""
+        """Initialize Advanced RAG service components."""
         self.embeddings = OpenAIEmbeddings(
             model=settings.embedding_model,
             openai_api_key=settings.openai_api_key,
         )
-        self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=settings.rag_chunk_size,
-            chunk_overlap=settings.rag_chunk_overlap,
-            separators=["\n\n", "\n", ". ", " ", ""],
+        self.parent_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=settings.rag_parent_chunk_size,
+            chunk_overlap=settings.rag_parent_chunk_overlap,
+        )
+        self.child_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=settings.rag_child_chunk_size,
+            chunk_overlap=settings.rag_child_chunk_overlap,
         )
         self._qdrant_client = QdrantClient(
             host=settings.qdrant_host,
             port=settings.qdrant_port,
         )
+        
         self.vector_store: Optional[QdrantVectorStore] = None
+        self.docstore = InMemoryStore()
+        self.bm25_retriever: Optional[BM25Retriever] = None
+        
         self.reranker = CohereRerank(
             model="rerank-multilingual-v3.0",
             cohere_api_key=settings.cohere_api_key,
             top_n=settings.rag_rerank_top_n,
         )
-        self._initialized = False
 
     def _ensure_vector_store(self) -> QdrantVectorStore:
-        """Get or create the Qdrant vector store.
-
-        Returns:
-            QdrantVectorStore instance connected to the configured collection.
-        """
+        """Get or create the Qdrant vector store."""
         if self.vector_store is None:
             self.vector_store = QdrantVectorStore(
                 client=self._qdrant_client,
@@ -82,22 +92,40 @@ class RAGService:
             )
         return self.vector_store
 
-    async def ingest_documents(self, folder_path: Optional[str] = None) -> dict:
-        """Load, chunk, embed, and store documents from a folder.
+    def _load_or_init_bm25(self, folder_path: str):
+        """Loads BM25 and DocStore states from disk if they exist."""
+        bm25_path = os.path.join(folder_path, "bm25_retriever.pkl")
+        docstore_path = os.path.join(folder_path, "docstore.pkl")
+        
+        if os.path.exists(bm25_path) and os.path.exists(docstore_path):
+            try:
+                with open(bm25_path, "rb") as f:
+                    self.bm25_retriever = pickle.load(f)
+                with open(docstore_path, "rb") as f:
+                    self.docstore.store = pickle.load(f)
+                logger.info("Loaded BM25 and DocStore from disk.")
+            except Exception as e:
+                logger.error(f"Error loading local state: {e}")
 
-        Processes all PDF files in the specified folder. Each document is split
-        into chunks, embedded via OpenAI, and stored in Qdrant.
+    def _save_bm25(self, folder_path: str):
+        """Saves BM25 and DocStore states to disk."""
+        bm25_path = os.path.join(folder_path, "bm25_retriever.pkl")
+        docstore_path = os.path.join(folder_path, "docstore.pkl")
+        
+        with open(bm25_path, "wb") as f:
+            pickle.dump(self.bm25_retriever, f)
+        with open(docstore_path, "wb") as f:
+            pickle.dump(self.docstore.store, f)
+        logger.info("Saved BM25 and DocStore to disk.")
+
+    async def ingest_documents(self, folder_path: Optional[str] = None) -> dict:
+        """Load, chunk, embed, and store documents from a folder using ParentDocumentRetriever.
 
         Args:
             folder_path: Path to folder containing PDF files.
-                Defaults to settings.documents_path.
 
         Returns:
-            Summary dict with documents_processed, total_chunks, and collection name.
-
-        Raises:
-            FileNotFoundError: If the folder path doesn't exist.
-            ValueError: If no PDF files are found in the folder.
+            Summary dict
         """
         folder_path = folder_path or settings.documents_path
 
@@ -114,68 +142,76 @@ class RAGService:
         if not pdf_files:
             raise ValueError(f"No PDF files found in {folder_path}")
 
-        # Check which files already exist in Qdrant to avoid re-embedding
-        existing_files = set()
+        # For ParentDocument and BM25, since they rely on LocalStore/In-Memory state which is lost on restart,
+        # we try fetching state from disk. If we need to ingest, we recreate the collection.
+        # Check if we have vectors
+        need_ingest = True
         try:
-            scroll_res, _ = self._qdrant_client.scroll(
-                collection_name=settings.qdrant_collection,
-                scroll_filter=models.Filter(),
-                limit=10000,
-                with_payload=["source_file"],
-                with_vectors=False
-            )
-            for point in scroll_res:
-                source = point.payload.get("source_file")
-                if source:
-                    existing_files.add(source)
+            info = self._qdrant_client.get_collection(settings.qdrant_collection)
+            if info.points_count > 0:
+                self._load_or_init_bm25(folder_path)
+                if self.bm25_retriever and len(self.docstore.store) > 0:
+                    need_ingest = False
         except Exception:
             pass # Collection might not exist yet
 
-        pdf_files = [f for f in pdf_files if os.path.basename(f) not in existing_files]
-
-        if not pdf_files:
-            logger.info("No new PDF files to ingest.")
+        if not need_ingest:
+            logger.info("Documents already ingested and states loaded.")
             return {
-                "documents_processed": 0,
-                "total_chunks": 0,
-                "collection": settings.qdrant_collection,
+                "documents_processed": len(pdf_files),
+                "status": "already_ingested"
             }
 
-        logger.info(f"Found {len(pdf_files)} new PDF files to ingest")
+        logger.info(f"Ingesting {len(pdf_files)} PDF files...")
 
-        # Load and chunk all documents
-        all_chunks: list[Document] = []
+        # Create/Recreate collection
+        try:
+            self._qdrant_client.recreate_collection(
+                collection_name=settings.qdrant_collection,
+                vectors_config=models.VectorParams(size=1536, distance=models.Distance.COSINE)
+            )
+        except Exception as e:
+            logger.error(f"Failed to recreate Qdrant collection: {e}")
+
+        self.vector_store = self._ensure_vector_store()
+        
+        # Setup ParentDocumentRetriever
+        parent_retriever = ParentDocumentRetriever(
+            vectorstore=self.vector_store,
+            docstore=self.docstore,
+            child_splitter=self.child_splitter,
+            parent_splitter=self.parent_splitter,
+        )
+
+        all_docs: list[Document] = []
         for pdf_path in pdf_files:
             logger.info(f"Loading: {os.path.basename(pdf_path)}")
             loader = PyMuPDFLoader(pdf_path)
             documents = loader.load()
 
-            # Add source metadata
+            # Add source metadata & fix 0-indexed pages
             for doc in documents:
                 doc.metadata["source_file"] = os.path.basename(pdf_path)
+                if "page" in doc.metadata:
+                    doc.metadata["page"] += 1
 
-            # Chunk the documents
-            chunks = self.text_splitter.split_documents(documents)
-            logger.info(
-                f"  → {len(documents)} pages → {len(chunks)} chunks"
-            )
-            all_chunks.extend(chunks)
+            all_docs.extend(documents)
+            
+        logger.info(f"Total pages loaded: {len(all_docs)}")
 
-        logger.info(f"Total chunks to embed: {len(all_chunks)}")
-
-        # Store in Qdrant (creates collection if it doesn't exist)
-        self.vector_store = QdrantVectorStore.from_documents(
-            documents=all_chunks,
-            embedding=self.embeddings,
-            url=f"http://{settings.qdrant_host}:{settings.qdrant_port}",
-            collection_name=settings.qdrant_collection,
-            force_recreate=False,  # Add incrementally, do not recreate
-        )
+        # 1. Add to Parent Retriever (Vector Store + DocStore)
+        parent_retriever.add_documents(all_docs)
+        
+        # 2. Add to BM25
+        self.bm25_retriever = BM25Retriever.from_documents(all_docs)
+        
+        # Persist states
+        self._save_bm25(folder_path)
 
         summary = {
             "documents_processed": len(pdf_files),
-            "total_chunks": len(all_chunks),
             "collection": settings.qdrant_collection,
+            "status": "ingested"
         }
         logger.info(f"Ingestion complete: {summary}")
         return summary
@@ -186,41 +222,53 @@ class RAGService:
         top_k: Optional[int] = None,
         use_reranking: bool = True,
     ) -> list[Document]:
-        """Retrieve relevant document chunks for a question.
-
-        Performs similarity search in Qdrant, optionally followed by
-        Cohere reranking for improved precision.
+        """Retrieve relevant parent document chunks using Ensemble Retriever.
 
         Args:
             question: The user's question.
-            top_k: Number of initial results to retrieve before reranking.
-                Defaults to settings.rag_top_k.
+            top_k: Number of initial results to retrieve.
             use_reranking: Whether to apply Cohere reranking.
-                Set to False for baseline evaluation comparison.
 
         Returns:
             List of relevant Document chunks, ordered by relevance.
         """
         top_k = top_k or settings.rag_top_k
-        store = self._ensure_vector_store()
-        base_retriever = store.as_retriever(
-            search_kwargs={"k": top_k},
+        self.vector_store = self._ensure_vector_store()
+        
+        # Make sure BM25/DocStore is loaded
+        if not self.bm25_retriever or not self.docstore.store:
+            self._load_or_init_bm25(settings.documents_path)
+            
+        parent_retriever = ParentDocumentRetriever(
+            vectorstore=self.vector_store,
+            docstore=self.docstore,
+            child_splitter=self.child_splitter,
+            parent_splitter=self.parent_splitter,
+            search_kwargs={"k": top_k}
         )
 
+        # Ensemble
+        if self.bm25_retriever:
+            self.bm25_retriever.k = top_k
+            ensemble_retriever = EnsembleRetriever(
+                retrievers=[self.bm25_retriever, parent_retriever],
+                weights=[0.3, 0.7] # Emphasize dense but keep sparse for exact hits
+            )
+        else:
+            logger.warning("BM25 not loaded, falling back to pure Vector search.")
+            ensemble_retriever = parent_retriever
+
         if use_reranking:
-            # Cohere reranking: retrieve top_k → rerank → return top_n
             retriever = ContextualCompressionRetriever(
                 base_compressor=self.reranker,
-                base_retriever=base_retriever,
+                base_retriever=ensemble_retriever,
             )
             results = await retriever.ainvoke(question)
         else:
-            # Baseline: no reranking (for eval comparison)
-            results = await base_retriever.ainvoke(question)
+            results = await ensemble_retriever.ainvoke(question)
 
         logger.info(
             f"Query: '{question[:50]}...' → {len(results)} results "
-            f"(reranking={'on' if use_reranking else 'off'})"
         )
         return results
 
@@ -229,18 +277,7 @@ class RAGService:
         question: str,
         use_reranking: bool = True,
     ) -> str:
-        """Retrieve and format context for inclusion in an LLM prompt.
-
-        Combines retrieved chunks into a formatted context string with
-        source citations.
-
-        Args:
-            question: The user's question.
-            use_reranking: Whether to apply Cohere reranking.
-
-        Returns:
-            Formatted context string with numbered chunks and sources.
-        """
+        """Retrieve and format context for inclusion in an LLM prompt."""
         results = await self.query(question, use_reranking=use_reranking)
 
         if not results:
@@ -257,11 +294,7 @@ class RAGService:
         return "\n\n---\n\n".join(context_parts)
 
     async def get_collection_info(self) -> dict:
-        """Get information about the current Qdrant collection.
-
-        Returns:
-            Dict with collection name, point count, and status.
-        """
+        """Get information about the current Qdrant collection."""
         try:
             info = self._qdrant_client.get_collection(settings.qdrant_collection)
             return {
@@ -292,6 +325,6 @@ if __name__ == "__main__":
 
         print("\nQuerying: 'Ce este TEZAUR?'")
         context = await rag_service.get_context_for_prompt("Ce este TEZAUR?")
-        print(f"Context:\n{context}")
+        print(f"\nFound {len(context.split('---'))} contexts")
 
     asyncio.run(test())

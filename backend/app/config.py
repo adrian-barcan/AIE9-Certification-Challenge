@@ -38,15 +38,21 @@ class Settings(BaseSettings):
     qdrant_collection: str = Field(default="financial_docs_ro")
 
     # === RAG Configuration ===
-    rag_chunk_size: int = Field(default=512)
-    rag_chunk_overlap: int = Field(default=64)
-    rag_top_k: int = Field(default=5, description="Initial retrieval count before reranking")
-    rag_rerank_top_n: int = Field(default=3, description="Final count after Cohere reranking")
+    rag_parent_chunk_size: int = Field(default=2000)
+    rag_parent_chunk_overlap: int = Field(default=200)
+    rag_child_chunk_size: int = Field(default=400)
+    rag_child_chunk_overlap: int = Field(default=50)
+    rag_top_k: int = Field(default=10, description="Initial retrieval count before reranking")
+    rag_rerank_top_n: int = Field(default=5, description="Final count after Cohere reranking")
     embedding_model: str = Field(default="text-embedding-3-small")
 
     # === LLM Models ===
     supervisor_model: str = Field(default="gpt-4o", description="Model for the supervisor agent")
     specialist_model: str = Field(default="gpt-4o-mini", description="Model for specialist sub-agents")
+    summary_model: str = Field(default="gpt-4o-mini", description="Model used to summarize chat history")
+
+    # === Memory Configuration ===
+    chat_history_limit: int = Field(default=10, description="Number of recent messages to keep active in memory before summarizing")
 
     # === Documents ===
     documents_path: str = Field(default="/app/documents", description="Path to financial PDFs")

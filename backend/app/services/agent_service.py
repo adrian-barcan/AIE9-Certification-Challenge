@@ -37,6 +37,7 @@ from tavily import AsyncTavilyClient
 
 from app.config import settings
 from app.services.rag_service import rag_service
+from app.services.memory_service import memory_service
 
 logger = logging.getLogger(__name__)
 
@@ -50,9 +51,14 @@ Your name is BaniWise. You help users with:
 2. Real-time market data and financial news
 3. Managing financial savings goals
 
-IMPORTANT RULES:
-- ALWAYS respond in the SAME LANGUAGE the user writes in. If they write in Romanian, respond in Romanian. If in English, respond in English. Auto-detect the language.
-- When discussing investment products, ALWAYS add a MiFID II disclaimer at the end.
+IMPORTANT STRICT LANGUAGE RULES:
+- ALWAYS respond in the SAME LANGUAGE the user writes in. Auto-detect the language from the user's message.
+- If the user writes in ENGLISH, you MUST respond ENTIRELY in ENGLISH. You must translate any Romanian information retrieved from your tools into English.
+- If the user writes in ROMANIAN, you MUST respond ENTIRELY in ROMANIAN.
+- Even if the documents or tools return Romanian text, you MUST TRANSLATE your final answer into the user's language.
+
+OTHER RULES:
+- When discussing investment products, ALWAYS add a MiFID II disclaimer at the end. Translate this disclaimer to match the user's language.
 - Cite sources when using information from documents.
 - Be helpful, professional, and encouraging about financial goals.
 - Use the appropriate specialist tool for each type of query.
@@ -72,7 +78,7 @@ Route queries to the right tool:
 
 CURRENT USER ID (always use this value when calling goals_summary or create_goal): {user_id}
 
-MiFID II DISCLAIMER (add when discussing investments):
+MiFID II DISCLAIMER (add when discussing investments, translate if user wrote in English):
 "⚠️ Această informație este doar în scop educativ și nu reprezintă o recomandare de investiții conform Directivei MiFID II. Consultați un consilier financiar autorizat înainte de a lua decizii de investiții."
 """
 
@@ -277,16 +283,27 @@ class AgentService:
         if self.pool:
             await self.pool.close()
 
-    async def _get_user_context(self, user_id: str) -> str:
+    async def _get_user_context(self, user_id: str, session_id: str = "default") -> str:
         """Build user context from long-term and semantic memory.
 
         Args:
             user_id: The user's UUID string.
+            session_id: The conversation thread ID for session-specific summary.
 
         Returns:
             Formatted user context for the system prompt.
         """
         parts = []
+
+        # Short-term memory summary: CoALA Working Memory Consolidation
+        summary_namespace = (user_id, "summary", session_id)
+        try:
+            summary_item = self.store.get(summary_namespace, "current_summary")
+            if summary_item and summary_item.value.get("content"):
+                parts.append("Conversation Summary So Far:")
+                parts.append(summary_item.value["content"])
+        except Exception:
+            pass
 
         # Long-term memory: user profile
         profile_namespace = (user_id, "profile")
@@ -343,7 +360,7 @@ class AgentService:
         Returns:
             The agent's response text.
         """
-        user_context = await self._get_user_context(user_id)
+        user_context = await self._get_user_context(user_id, session_id)
         system_prompt = SUPERVISOR_SYSTEM_PROMPT.format(user_context=user_context, user_id=user_id)
 
         config = {
@@ -361,10 +378,37 @@ class AgentService:
             existing_messages = []
 
         trim_messages = []
-        if len(existing_messages) > 10:
-            for m in existing_messages[:-10]:
+        messages_to_summarize = []
+        if len(existing_messages) > settings.chat_history_limit:
+            keep_idx = len(existing_messages) - settings.chat_history_limit
+            while keep_idx > 0 and existing_messages[keep_idx].type == "tool":
+                keep_idx -= 1
+            
+            # Extract messages that are about to drop out of the context window
+            for m in existing_messages[:keep_idx]:
                 if hasattr(m, "id") and m.id and not str(m.id).startswith("sys_"):
                     trim_messages.append(RemoveMessage(id=m.id))
+                    # Only summarize Human/Assistant messages to save tokens and noise
+                    if m.type in ["human", "ai"] and m.content:
+                        messages_to_summarize.append(m)
+
+        # Update the rolling summary if there are messages falling out of context
+        if messages_to_summarize:
+            summary_namespace = (user_id, "summary", session_id)
+            current_summary = ""
+            try:
+                summary_item = self.store.get(summary_namespace, "current_summary")
+                if summary_item:
+                    current_summary = summary_item.value.get("content", "")
+            except Exception:
+                pass
+                
+            new_summary = await memory_service.summarize_messages(messages_to_summarize, current_summary)
+            if new_summary:
+                self.store.put(summary_namespace, "current_summary", {"content": new_summary})
+                # Reload context since we just updated the summary
+                user_context = await self._get_user_context(user_id, session_id)
+                system_prompt = SUPERVISOR_SYSTEM_PROMPT.format(user_context=user_context, user_id=user_id)
 
         input_messages = {
             "messages": trim_messages + [
@@ -398,7 +442,7 @@ class AgentService:
         Yields:
             Response tokens as they are generated.
         """
-        user_context = await self._get_user_context(user_id)
+        user_context = await self._get_user_context(user_id, session_id)
         system_prompt = SUPERVISOR_SYSTEM_PROMPT.format(user_context=user_context, user_id=user_id)
 
         config = {
@@ -416,10 +460,38 @@ class AgentService:
             existing_messages = []
 
         trim_messages = []
-        if len(existing_messages) > 10:
-            for m in existing_messages[:-10]:
+        messages_to_summarize = []
+        if len(existing_messages) > settings.chat_history_limit:
+            keep_idx = len(existing_messages) - settings.chat_history_limit
+            while keep_idx > 0 and existing_messages[keep_idx].type == "tool":
+                keep_idx -= 1
+                
+            # Extract messages that are about to drop out of the context window
+            for m in existing_messages[:keep_idx]:
                 if hasattr(m, "id") and m.id and not str(m.id).startswith("sys_"):
                     trim_messages.append(RemoveMessage(id=m.id))
+                    # Only summarize Human/Assistant messages to save tokens and noise
+                    if m.type in ["human", "ai"] and m.content:
+                        messages_to_summarize.append(m)
+
+        # Update the rolling summary if there are messages falling out of context
+        if messages_to_summarize:
+            summary_namespace = (user_id, "summary", session_id)
+            current_summary = ""
+            try:
+                summary_item = self.store.get(summary_namespace, "current_summary")
+                if summary_item:
+                    current_summary = summary_item.value.get("content", "")
+            except Exception:
+                pass
+                
+            new_summary = await memory_service.summarize_messages(messages_to_summarize, current_summary)
+            if new_summary:
+                self.store.put(summary_namespace, "current_summary", {"content": new_summary})
+                # Reload context since we just updated the summary
+                user_context = await self._get_user_context(user_id, session_id)
+                system_prompt = SUPERVISOR_SYSTEM_PROMPT.format(user_context=user_context, user_id=user_id)
+
 
         input_messages = {
             "messages": trim_messages + [
