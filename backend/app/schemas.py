@@ -40,6 +40,7 @@ class GoalCreate(BaseModel):
     monthly_contribution: float = Field(default=0, ge=0)
     deadline: Optional[datetime] = None
     priority: str = Field(default="medium")
+    currency: str = Field(default="RON", max_length=3)
     notes: Optional[str] = None
 
 
@@ -51,6 +52,7 @@ class GoalUpdate(BaseModel):
     monthly_contribution: Optional[float] = Field(None, ge=0)
     deadline: Optional[datetime] = None
     priority: Optional[str] = None
+    currency: Optional[str] = Field(None, max_length=3)
     status: Optional[str] = None
     notes: Optional[str] = None
 
@@ -71,6 +73,7 @@ class GoalResponse(BaseModel):
     monthly_contribution: float
     deadline: Optional[datetime]
     priority: str
+    currency: str
     status: str
     notes: Optional[str]
     progress_percent: float

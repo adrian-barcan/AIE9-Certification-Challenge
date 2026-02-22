@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     summary_model: str = Field(default="gpt-4o-mini", description="Model used to summarize chat history")
 
     # === Memory Configuration ===
-    chat_history_limit: int = Field(default=10, description="Number of recent messages to keep active in memory before summarizing")
+    chat_history_limit: int = Field(default=100, description="Number of recent messages to keep active in memory before summarizing")
 
     # === Documents ===
     documents_path: str = Field(default="/app/documents", description="Path to financial PDFs")

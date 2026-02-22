@@ -86,6 +86,11 @@ class Goal(Base):
         default=GoalPriority.MEDIUM.value,
         nullable=False,
     )
+    currency: Mapped[str] = mapped_column(
+        String(3),
+        default="RON",
+        nullable=False,
+    )
     status: Mapped[str] = mapped_column(
         String(15),
         default=GoalStatus.ACTIVE.value,

@@ -59,7 +59,7 @@ IMPORTANT STRICT LANGUAGE RULES:
 
 OTHER RULES:
 - When discussing investment products, ALWAYS add a MiFID II disclaimer at the end. Translate this disclaimer to match the user's language.
-- Cite sources when using information from documents.
+- Cite sources when using information from documents. Use the reference numbers (e.g., [1], [2]) inline, and ALWAYS append a "Sources:" or "Surse:" list at the very end mapping those numbers to their source files and pages.
 - Be helpful, professional, and encouraging about financial goals.
 - Use the appropriate specialist tool for each type of query.
 
@@ -298,7 +298,7 @@ class AgentService:
         # Short-term memory summary: CoALA Working Memory Consolidation
         summary_namespace = (user_id, "summary", session_id)
         try:
-            summary_item = self.store.get(summary_namespace, "current_summary")
+            summary_item = await self.store.aget(summary_namespace, "current_summary")
             if summary_item and summary_item.value.get("content"):
                 parts.append("Conversation Summary So Far:")
                 parts.append(summary_item.value["content"])
@@ -308,7 +308,7 @@ class AgentService:
         # Long-term memory: user profile
         profile_namespace = (user_id, "profile")
         try:
-            profile_items = self.store.search(profile_namespace)
+            profile_items = await self.store.asearch(profile_namespace)
             if profile_items:
                 parts.append("User Profile:")
                 for item in profile_items:
@@ -319,7 +319,7 @@ class AgentService:
         # Semantic memory: learned financial knowledge
         knowledge_namespace = (user_id, "knowledge")
         try:
-            knowledge_items = self.store.search(knowledge_namespace)
+            knowledge_items = await self.store.asearch(knowledge_namespace)
             if knowledge_items:
                 parts.append("Known Financial Context:")
                 for item in knowledge_items[:5]:  # Limit to top 5
@@ -342,7 +342,7 @@ class AgentService:
             value: Preference value.
         """
         namespace = (user_id, "profile")
-        self.store.put(namespace, key, {"value": value})
+        await self.store.aput(namespace, key, {"value": value})
 
     async def chat(
         self,
@@ -397,7 +397,7 @@ class AgentService:
             summary_namespace = (user_id, "summary", session_id)
             current_summary = ""
             try:
-                summary_item = self.store.get(summary_namespace, "current_summary")
+                summary_item = await self.store.aget(summary_namespace, "current_summary")
                 if summary_item:
                     current_summary = summary_item.value.get("content", "")
             except Exception:
@@ -405,7 +405,7 @@ class AgentService:
                 
             new_summary = await memory_service.summarize_messages(messages_to_summarize, current_summary)
             if new_summary:
-                self.store.put(summary_namespace, "current_summary", {"content": new_summary})
+                await self.store.aput(summary_namespace, "current_summary", {"content": new_summary})
                 # Reload context since we just updated the summary
                 user_context = await self._get_user_context(user_id, session_id)
                 system_prompt = SUPERVISOR_SYSTEM_PROMPT.format(user_context=user_context, user_id=user_id)
@@ -479,7 +479,7 @@ class AgentService:
             summary_namespace = (user_id, "summary", session_id)
             current_summary = ""
             try:
-                summary_item = self.store.get(summary_namespace, "current_summary")
+                summary_item = await self.store.aget(summary_namespace, "current_summary")
                 if summary_item:
                     current_summary = summary_item.value.get("content", "")
             except Exception:
@@ -487,7 +487,7 @@ class AgentService:
                 
             new_summary = await memory_service.summarize_messages(messages_to_summarize, current_summary)
             if new_summary:
-                self.store.put(summary_namespace, "current_summary", {"content": new_summary})
+                await self.store.aput(summary_namespace, "current_summary", {"content": new_summary})
                 # Reload context since we just updated the summary
                 user_context = await self._get_user_context(user_id, session_id)
                 system_prompt = SUPERVISOR_SYSTEM_PROMPT.format(user_context=user_context, user_id=user_id)
