@@ -38,14 +38,18 @@ async def chat(data: ChatRequest) -> StreamingResponse:
     """
 
     async def event_stream():
-        """Generate SSE events from agent response."""
+        """Generate SSE events from agent response (tokens and status placeholders)."""
         try:
-            async for token in agent_service.stream(
+            async for item in agent_service.stream(
                 message=data.message,
                 user_id=str(data.user_id),
                 session_id=data.session_id,
             ):
-                yield f"data: {json.dumps({'token': token})}\n\n"
+                # item is either {"token": str} or {"status": str}
+                if isinstance(item, dict):
+                    yield f"data: {json.dumps(item)}\n\n"
+                else:
+                    yield f"data: {json.dumps({'token': item})}\n\n"
             yield f"data: {json.dumps({'done': True})}\n\n"
         except Exception as e:
             logger.error(f"Chat stream error: {e}")

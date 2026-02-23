@@ -17,7 +17,8 @@ Usage:
 
 import logging
 import uuid
-from typing import Annotated, Any, AsyncGenerator, Literal, Optional, Sequence
+from datetime import datetime
+from typing import Annotated, Any, AsyncGenerator, Literal, Optional, Sequence, Union
 
 from langchain_core.messages import (
     AIMessage,
@@ -69,12 +70,14 @@ You have access to the following tools:
 - goals_summary: Get the user's current financial goals and progress
 
 Route queries to the right tool:
-- Questions about financial products, regulations, definitions → rag_query
-- Questions about current prices, exchange rates, news → market_search
+- Questions about HOW financial products work, historical data, regulations, definitions → rag_query
+- Questions about CURRENT prices, ONGOING/OPEN subscriptions (e.g., TEZAUR/FIDELIS available TODAY), exchange rates, news → market_search
 - Questions about the user's goals, savings progress → goals_summary
 - General financial advice → combine knowledge from tools as needed
 
 {user_context}
+
+CURRENT DATE AND TIME: {current_date}
 
 CURRENT USER ID (always use this value when calling goals_summary or create_goal): {user_id}
 
@@ -82,6 +85,14 @@ MiFID II DISCLAIMER (add when discussing investments, translate if user wrote in
 "⚠️ Această informație este doar în scop educativ și nu reprezintă o recomandare de investiții conform Directivei MiFID II. Consultați un consilier financiar autorizat înainte de a lua decizii de investiții."
 """
 
+
+# User-facing status messages when a tool is invoked (streaming placeholder)
+TOOL_STATUS_MESSAGES = {
+    "rag_query": "Searching financial documents…",
+    "market_search": "Searching market data…",
+    "goals_summary": "Loading your goals…",
+    "create_goal": "Creating goal…",
+}
 
 # ===================================================================
 # Tools (available to the agent)
@@ -91,8 +102,8 @@ MiFID II DISCLAIMER (add when discussing investments, translate if user wrote in
 async def rag_query(question: str) -> str:
     """Search Romanian financial documents for information about financial instruments, regulations, and investment products.
 
-    Use this tool when the user asks about: TEZAUR, FIDELIS, BVB, ASF regulations,
-    Romanian financial products, tax implications, or any financial knowledge topic.
+    Use this tool when the user asks about: HOW TEZAUR or FIDELIS work, rules, historical context, BVB definitions, ASF regulations,
+    Romanian financial products, tax implications, or any general financial knowledge topic. DO NOT use for currently open/available emissions.
 
     Args:
         question: The financial question to search documents for.
@@ -105,7 +116,7 @@ async def rag_query(question: str) -> str:
         return context
     except Exception as e:
         logger.error(f"RAG query failed: {e}")
-        return f"Nu am putut accesa documentele financiare: {str(e)}"
+        return f"Document search failed. Please try again or rephrase your question. (Details: {e})"
 
 
 @tool
@@ -113,7 +124,7 @@ async def market_search(query: str) -> str:
     """Search for live market data, exchange rates, stock prices, and financial news.
 
     Use this tool when the user asks about: current BVB prices, EUR/RON exchange rate,
-    financial news, market trends, or any real-time financial information.
+    financial news, market trends, currently open bond emissions (like FIDELIS/TEZAUR available today), or any real-time financial information.
 
     Args:
         query: The market/financial search query.
@@ -136,10 +147,10 @@ async def market_search(query: str) -> str:
         for result in response.get("results", [])[:3]:
             parts.append(f"- {result.get('title', 'N/A')}: {result.get('content', '')[:200]}")
             parts.append(f"  Source: {result.get('url', '')}")
-        return "\n".join(parts) if parts else "Nu am găsit rezultate relevante."
+        return "\n".join(parts) if parts else "No relevant results found."
     except Exception as e:
         logger.error(f"Market search failed: {e}")
-        return f"Căutarea pe piață a eșuat: {str(e)}"
+        return f"Market search failed. Please try again. (Details: {e})"
 
 
 @tool
@@ -165,7 +176,7 @@ async def goals_summary(user_id: str) -> str:
             return summary
     except Exception as e:
         logger.error(f"Goals summary failed: {e}")
-        return f"Nu am putut accesa obiectivele: {str(e)}"
+        return f"Could not retrieve goals. Please try again. (Details: {e})"
 
 
 @tool
@@ -215,7 +226,7 @@ async def create_goal(
             )
     except Exception as e:
         logger.error(f"Create goal failed: {e}")
-        return f"Nu am putut crea obiectivul: {str(e)}"
+        return f"Could not create goal. Please try again. (Details: {e})"
 
 
 # ===================================================================
@@ -361,7 +372,11 @@ class AgentService:
             The agent's response text.
         """
         user_context = await self._get_user_context(user_id, session_id)
-        system_prompt = SUPERVISOR_SYSTEM_PROMPT.format(user_context=user_context, user_id=user_id)
+        system_prompt = SUPERVISOR_SYSTEM_PROMPT.format(
+            user_context=user_context, 
+            user_id=user_id,
+            current_date=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        )
 
         config = {
             "configurable": {
@@ -408,7 +423,11 @@ class AgentService:
                 await self.store.aput(summary_namespace, "current_summary", {"content": new_summary})
                 # Reload context since we just updated the summary
                 user_context = await self._get_user_context(user_id, session_id)
-                system_prompt = SUPERVISOR_SYSTEM_PROMPT.format(user_context=user_context, user_id=user_id)
+                system_prompt = SUPERVISOR_SYSTEM_PROMPT.format(
+                    user_context=user_context,
+                    user_id=user_id,
+                    current_date=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                )
 
         input_messages = {
             "messages": trim_messages + [
@@ -424,15 +443,19 @@ class AgentService:
         ]
         if ai_messages:
             return ai_messages[-1].content
-        return "Nu am putut genera un răspuns."
+        return "I could not generate a response."
 
     async def stream(
         self,
         message: str,
         user_id: str,
         session_id: str = "default",
-    ) -> AsyncGenerator[str, None]:
-        """Stream agent response tokens.
+    ) -> AsyncGenerator[Union[str, dict], None]:
+        """Stream agent response tokens and status placeholders when tools run.
+
+        Yields either a token string (for backward compatibility) or a dict:
+        - {"token": str}: LLM content chunk
+        - {"status": str}: placeholder message while a tool is running (e.g. "Searching documents…")
 
         Args:
             message: The user's message.
@@ -440,10 +463,14 @@ class AgentService:
             session_id: Conversation thread ID.
 
         Yields:
-            Response tokens as they are generated.
+            Either a content string or a dict with "token" or "status" key.
         """
         user_context = await self._get_user_context(user_id, session_id)
-        system_prompt = SUPERVISOR_SYSTEM_PROMPT.format(user_context=user_context, user_id=user_id)
+        system_prompt = SUPERVISOR_SYSTEM_PROMPT.format(
+            user_context=user_context, 
+            user_id=user_id,
+            current_date=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        )
 
         config = {
             "configurable": {
@@ -490,7 +517,11 @@ class AgentService:
                 await self.store.aput(summary_namespace, "current_summary", {"content": new_summary})
                 # Reload context since we just updated the summary
                 user_context = await self._get_user_context(user_id, session_id)
-                system_prompt = SUPERVISOR_SYSTEM_PROMPT.format(user_context=user_context, user_id=user_id)
+                system_prompt = SUPERVISOR_SYSTEM_PROMPT.format(
+                    user_context=user_context, 
+                    user_id=user_id,
+                    current_date=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                )
 
 
         input_messages = {
@@ -503,11 +534,15 @@ class AgentService:
         async for event in self.graph.astream_events(
             input_messages, config=config, version="v2"
         ):
-            if (
+            if event["event"] == "on_tool_start":
+                tool_name = event.get("name", "")
+                status_msg = TOOL_STATUS_MESSAGES.get(tool_name, "Working…")
+                yield {"status": status_msg}
+            elif (
                 event["event"] == "on_chat_model_stream"
                 and event["data"]["chunk"].content
             ):
-                yield event["data"]["chunk"].content
+                yield {"token": event["data"]["chunk"].content}
 
     async def get_history(self, session_id: str) -> list[dict]:
         """Get conversation history for a session.

@@ -26,6 +26,7 @@ export default function ChatPage() {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState("");
     const [isStreaming, setIsStreaming] = useState(false);
+    const [streamingStatus, setStreamingStatus] = useState<string | null>(null);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -172,6 +173,7 @@ export default function ChatPage() {
                 user.id,
                 activeSessionId,
                 (token) => {
+                    setStreamingStatus(null);
                     setMessages((prev) => {
                         const updated = [...prev];
                         const last = updated[updated.length - 1];
@@ -183,7 +185,8 @@ export default function ChatPage() {
                         }
                         return updated;
                     });
-                }
+                },
+                (status) => setStreamingStatus(status)
             );
         } catch {
             setMessages((prev) => {
@@ -199,6 +202,7 @@ export default function ChatPage() {
             });
         } finally {
             setIsStreaming(false);
+            setStreamingStatus(null);
             textareaRef.current?.focus();
 
             // Optionally, refresh session list to show updated titles
@@ -309,7 +313,7 @@ export default function ChatPage() {
                                             : "bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border)] rounded-tl-sm"
                                             }`}
                                     >
-                                        {msg.role === "assistant" && !msg.content && isStreaming ? (
+                                        {msg.role === "assistant" && isStreaming && i === messages.length - 1 && !msg.content && !streamingStatus ? (
                                             <div className="flex gap-1.5 py-1 px-1">
                                                 <div className="w-2 h-2 rounded-full bg-current opacity-40 typing-dot" />
                                                 <div
@@ -321,6 +325,8 @@ export default function ChatPage() {
                                                     style={{ animationDelay: "0.4s" }}
                                                 />
                                             </div>
+                                        ) : msg.role === "assistant" && isStreaming && i === messages.length - 1 && streamingStatus ? (
+                                            <span className="text-[var(--text-muted)] italic">{streamingStatus}</span>
                                         ) : (
                                             <div className="prose dark:prose-invert prose-sm max-w-none break-words">
                                                 <ReactMarkdown remarkPlugins={[remarkGfm]}>

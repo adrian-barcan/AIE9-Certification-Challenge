@@ -281,7 +281,7 @@ class RAGService:
         results = await self.query(question, use_reranking=use_reranking)
 
         if not results:
-            return "Nu am găsit informații relevante în documentele indexate."
+            return "No relevant information found in the indexed documents."
 
         context_parts = []
         for i, doc in enumerate(results, 1):

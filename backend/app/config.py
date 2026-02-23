@@ -4,8 +4,10 @@ Loads all settings from environment variables / .env file using Pydantic Setting
 Covers API keys, database connections, RAG parameters, and LLM model choices.
 """
 
+import os
+
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import Field, model_validator
 
 
 class Settings(BaseSettings):
@@ -20,6 +22,13 @@ class Settings(BaseSettings):
     langsmith_api_key: str = Field(default="", description="LangSmith API key")
     langchain_tracing_v2: bool = Field(default=True, description="Enable LangChain tracing")
     langchain_project: str = Field(default="financial-agent", description="LangSmith project name")
+
+    @model_validator(mode="after")
+    def disable_tracing_when_no_langsmith_key(self) -> "Settings":
+        """Turn off LangChain tracing when LangSmith API key is missing or empty."""
+        if not (self.langsmith_api_key and self.langsmith_api_key.strip()):
+            object.__setattr__(self, "langchain_tracing_v2", False)
+        return self
 
     # === PostgreSQL ===
     postgres_user: str = Field(default="financial_agent")
@@ -66,3 +75,8 @@ class Settings(BaseSettings):
 
 # Singleton settings instance
 settings = Settings()
+
+# Sync tracing to env so LangChain (which reads os.environ) respects it
+os.environ["LANGCHAIN_TRACING_V2"] = str(settings.langchain_tracing_v2).lower()
+if settings.langsmith_api_key:
+    os.environ["LANGCHAIN_API_KEY"] = settings.langsmith_api_key
