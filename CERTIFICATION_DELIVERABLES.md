@@ -34,7 +34,7 @@ Additionally, there is no Romanian-language AI financial assistant that combines
 
 ### UX and Tools
 
-BaniWise is a conversational financial assistant deployed as a web application. The frontend is a clean chat-first interface (Next.js 14) with a sidebar for navigation. Users ask questions in natural language (Romanian or English) and the agent draws on its document knowledge base, live web search, and the user's personal savings goals to provide contextually rich answers. A dedicated "Goals" tab allows users to create and track savings targets visually with progress bars and feasibility indicators. The agent includes automatic MiFID II disclaimers whenever investment products are discussed, and cites sources inline with page numbers.
+BaniWise is a conversational financial assistant deployed as a web application. The frontend is a clean chat-first interface (Next.js 14) with a sidebar for navigation. Users ask questions in natural language (Romanian or English) and the agent draws on its document knowledge base, live web search, the user's personal savings goals, and **anonymized transaction insights** to provide contextually rich answers. A dedicated "Goals" tab allows users to create and track savings targets visually with progress bars and feasibility indicators. A **Transactions** tab lets users upload CSV bank statements (BRD, BCR, Raiffeisen, ING); the backend parses, categorizes (Mistral via Ollama or rule-based fallback), and anonymizes transactions, then the agent can use the `savings_insights` tool to suggest where to save based on spending by **detailed categories** (fees, shopping, transport, health, groceries, etc.). The agent includes automatic MiFID II disclaimers whenever investment products are discussed, and cites sources inline with page numbers.
 
 ### Architecture Diagram
 
@@ -66,6 +66,7 @@ flowchart TB
         Docs["Document knowledge<br/>Financial docs, regulations"]
         Market["Live market data<br/>Rates, news"]
         Goals["User goals and memory<br/>Savings targets, conversation"]
+        Transactions["Transaction insights<br/>Savings by category (fees, shopping, transport, health)"]
     end
 
     subgraph Data ["Data & external services"]
@@ -73,6 +74,7 @@ flowchart TB
         Cohere["Cohere<br/>Rerank"]
         OpenAI["OpenAI<br/>GPT-4o · embeddings"]
         Tavily["Tavily<br/>Search"]
+        Ollama["Ollama<br/>Mistral · transaction categorization"]
         Postgres["PostgreSQL<br/>Goals · profile · memory"]
     end
 
@@ -80,15 +82,18 @@ flowchart TB
     Agent --> Docs
     Agent --> Market
     Agent --> Goals
+    Agent --> Transactions
     Docs --> Qdrant
     Docs --> Cohere
     Docs --> OpenAI
     Market --> Tavily
+    Transactions -.-> Ollama
     Goals --> Postgres
+    Transactions --> Postgres
     Agent --> Postgres
     Agent --> OpenAI
 
-    linkStyle 0,1,2,3,4,5,6,7,8,9,10,11 stroke:#1e293b,stroke-width:2px
+    linkStyle 0,1,2,3,4,5,6,7,8,9,10,11,12,13 stroke:#1e293b,stroke-width:2px
 ```
 
 See [README.md](README.md#-architecture) for detailed technical diagrams of the RAG pipeline, memory, and tool routing.
@@ -99,7 +104,8 @@ See [README.md](README.md#-architecture) for detailed technical diagrams of the 
 |---|---|---|
 | **LLM** | OpenAI GPT-4o | Best multilingual reasoning for Romanian financial domain; supports tool calling natively for the Supervisor pattern. |
 | **Agent Orchestration** | LangChain + LangGraph | Provides the `StateGraph` and `create_react_agent` abstractions needed for the Supervisor pattern with checkpointed state — directly aligned with AIE9 Sessions 4–6. |
-| **Tools** | `rag_query`, `market_search`, `goals_summary`, `create_goal` | Maps the financial domain to four clear capabilities: static knowledge, live data, goal reading, and goal creation — each routed by the Supervisor. |
+| **Tools** | `rag_query`, `market_search`, `goals_summary`, `create_goal`, `savings_insights` | Maps the financial domain to five capabilities: static knowledge, live data, goal reading, goal creation, and transaction-based savings insights — each routed by the Supervisor. |
+| **Transaction categorization** | Mistral (Ollama) + rule-based fallback | Detailed categories: fees (account, ATM, transfer, card, overdraft, interest, FX, other), shopping (electronics, clothing, home/garden, beauty, other), transport (fuel, public, taxi, parking/tolls, car maintenance, other), health (pharmacy, doctor/clinic, dental, optics, insurance, other). Same set used by LLM and rules; no PII leaves the server. |
 | **Embedding Model** | OpenAI `text-embedding-3-small` | Cost-effective, high-quality embeddings with 1536 dimensions; consistent with the RAG pipeline from AIE9 Session 2. |
 | **Vector Database** | Qdrant | Purpose-built for vector similarity search with filtering; runs containerized via Docker Compose for easy local deployment. |
 | **Monitoring** | LangSmith | Enables end-to-end tracing of agent runs, tool invocations, and LLM calls; directly integrated via LangChain's tracing configuration. |

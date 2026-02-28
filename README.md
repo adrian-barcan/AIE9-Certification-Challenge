@@ -11,6 +11,7 @@ The heartbeat of the system is a **Supervisor Agent Pattern** powered by `GPT-4o
 - **`rag_query`**: Searches Romanian financial documents (TEZAUR, FIDELIS, BVB guides).
 - **`market_search`**: Live financial data and news retrieval via the **Tavily Search API**.
 - **`goals_*`**: Interface with the PostgreSQL database to manage and track user savings goals.
+- **`savings_insights`**: Uses anonymized transaction data (spending by category, fees, recurring) to suggest where the user can save; powered by uploaded CSV bank statements and detailed categorization (fees, shopping, transport, health, etc.).
 
 ### 2. CoALA Memory Architecture
 Implements 3 of the 5 cognitive memory types from the CoALA framework using LangGraph's new Postgres checkpointers:
@@ -49,9 +50,11 @@ flowchart TB
         ChatAPI["/api/chat"]
         DocsAPI["/api/documents/ingest"]
         GoalsAPI["/api/goals"]
+        TransactionsAPI["/api/transactions"]
         FastAPI --> ChatAPI
         FastAPI --> DocsAPI
         FastAPI --> GoalsAPI
+        FastAPI --> TransactionsAPI
     end
 
     subgraph Agent["🧠 AI Agent Layer"]
@@ -64,9 +67,11 @@ flowchart TB
         RAG[rag_query]
         Market[market_search]
         GoalsTool[goals_summary<br/>create_goal]
+        SavingsTool[savings_insights]
         Tools --> RAG
         Tools --> Market
         Tools --> GoalsTool
+        Tools --> SavingsTool
     end
 
     subgraph Memory["📦 CoALA Memory"]
@@ -80,6 +85,7 @@ flowchart TB
         Qdrant[Qdrant<br/>Vector DB]
         Cohere[Cohere<br/>Reranker]
         Tavily[Tavily<br/>Web Search]
+        Ollama[Ollama<br/>Mistral · transaction categories]
         PG[(PostgreSQL)]
     end
 
@@ -87,6 +93,8 @@ flowchart TB
     ChatAPI --> Supervisor
     DocsAPI --> RAG
     GoalsAPI --> PG
+    TransactionsAPI --> PG
+    TransactionsAPI -.->|optional| Ollama
 
     Supervisor <-->|context & history| Memory
     RAG --> Qdrant
@@ -94,6 +102,7 @@ flowchart TB
     RAG --> OpenAI
     Market --> Tavily
     GoalsTool --> PG
+    SavingsTool --> PG
     Supervisor -->|completion| OpenAI
 ```
 
@@ -208,7 +217,7 @@ flowchart TB
 
 ### Agent Tool Routing
 
-Supervisor routing to `rag_query`, `market_search`, `goals_summary`, `create_goal`.
+Supervisor routing to `rag_query`, `market_search`, `goals_summary`, `create_goal`, `savings_insights`.
 
 ```mermaid
 flowchart TB
@@ -224,20 +233,65 @@ flowchart TB
     Decision -->|Live data, news<br/>prices, EUR/RON| Market[market_search]
     Decision -->|Goals, progress| GoalsSum[goals_summary]
     Decision -->|Create new goal| CreateGoal[create_goal]
+    Decision -->|Savings, spending,<br/>where to save| Savings[savings_insights]
     Decision -->|No tool / combine| Direct[Direct answer]
 
     RAG --> RAGService[RAG Service<br/>Qdrant + Cohere]
     Market --> Tavily[Tavily API]
     GoalsSum --> GoalsService[Goals Service<br/>PostgreSQL]
     CreateGoal --> GoalsService
+    Savings --> TxService[Transaction Service<br/>savings summary · PostgreSQL]
 
     RAGService --> Context[Context to LLM]
     Tavily --> Context
     GoalsService --> Context
+    TxService --> Context
     Context --> Supervisor
     Direct --> Response[Streamed Response]
     Supervisor --> Response
 ```
+
+### Transaction import and categorization
+
+Bank statement CSV upload (Transactions page) is parsed, categorized (Mistral via Ollama or rule-based fallback), anonymized, and stored in PostgreSQL. The agent uses `savings_insights` to summarize spending by category and suggest where to save.
+
+```mermaid
+flowchart LR
+    subgraph Upload["📤 Upload"]
+        CSV[CSV Bank Statement]
+        Parser[Transaction Parser<br/>BRD · BCR · Raiffeisen · ING]
+        CSV --> Parser
+    end
+
+    subgraph Categorize["🏷️ Categorize"]
+        Check{Ollama<br/>available?}
+        OllamaSvc[Ollama<br/>Mistral model]
+        Rules[Rule-based fallback]
+        Mistral[Mistral categories]
+        RuleCats[Same category set]
+        Parser --> Check
+        Check -->|yes| OllamaSvc --> Mistral
+        Check -->|no| Rules --> RuleCats
+    end
+
+    subgraph Store["📦 Store"]
+        Anon[Anonymizer]
+        PG_TX[(PostgreSQL<br/>Transactions)]
+        Mistral --> Anon
+        RuleCats --> Anon
+        Anon --> PG_TX
+    end
+```
+
+**Transaction categories** (detailed; used by both Mistral and rule-based fallback):
+
+| Group | Categories |
+|-------|------------|
+| **Fees** | `ACCOUNT_MAINTENANCE_FEE`, `ATM_FEE`, `TRANSFER_FEE`, `CARD_FEE`, `OVERDRAFT_FEE`, `LOAN_INTEREST_FEE`, `FOREIGN_EXCHANGE_FEE`, `OTHER_FEE` |
+| **Shopping** | `ELECTRONICS_SHOPPING`, `CLOTHING_SHOPPING`, `HOME_GARDEN_SHOPPING`, `BEAUTY_AND_PERSONAL_CARE`, `OTHER_SHOPPING` |
+| **Transport** | `FUEL_TRANSPORT`, `PUBLIC_TRANSPORT`, `TAXI_AND_RIDESHARE`, `PARKING_AND_TOLLS`, `CAR_MAINTENANCE`, `OTHER_TRANSPORT` |
+| **Health** | `PHARMACY_HEALTH`, `DOCTOR_AND_CLINIC`, `DENTAL_HEALTH`, `OPTICS_HEALTH`, `HEALTH_INSURANCE`, `OTHER_HEALTH` |
+| **Other** | `SUBSCRIPTION`, `GROCERIES`, `DINING`, `UTILITIES`, `OTHER` |
 
 Diagrams are defined in Mermaid in this README and in [CERTIFICATION_DELIVERABLES.md](CERTIFICATION_DELIVERABLES.md).
 
@@ -282,7 +336,7 @@ Required for the agent and RAG:
 
 Optional: `LANGSMITH_API_KEY` (tracing), `POSTGRES_*` / `DATABASE_URL`, `QDRANT_*`. See [.env.example](.env.example) for defaults.
 
-**Optional: Ollama (Mistral) for transaction categorization** — When you upload CSV transactions, the app can use a local Mistral model via Ollama to categorize them (no data sent to the cloud). If Ollama is not running, it falls back to rule-based categorization. See [Optional: Ollama + Mistral](#optional-ollama--mistral) below.
+**Optional: Ollama (Mistral) for transaction categorization** — When you upload CSV transactions, the app can use a local Mistral model via Ollama to assign **detailed categories** (fees, shopping, transport, health, groceries, etc.). If Ollama is not running, it falls back to rule-based categorization with the same category set. See [Optional: Ollama + Mistral](#optional-ollama--mistral) below.
 
 ## 🚀 Quick Start
 
@@ -341,10 +395,14 @@ If Ollama is not available, the backend uses rule-based categorization; import s
 │   │   ├── models/          # SQLAlchemy ORM models
 │   │   ├── schemas.py       # Pydantic validation schemas
 │   │   └── services/
-│   │       ├── agent_service.py  # LangGraph Supervisor & CoALA Memory
-│   │       ├── rag_service.py    # Qdrant + Cohere contextual compression
-│   │       ├── goals_service.py  # Financial goals (PostgreSQL)
-│   │       └── memory_service.py # Conversation summarization
+│   │       ├── agent_service.py      # LangGraph Supervisor & CoALA Memory
+│   │       ├── rag_service.py        # Qdrant + Cohere contextual compression
+│   │       ├── goals_service.py     # Financial goals (PostgreSQL)
+│   │       ├── memory_service.py    # Conversation summarization
+│   │       ├── transaction_service.py   # Transaction ingest & savings summary
+│   │       ├── transaction_parser.py     # CSV parsing (BRD, BCR, Raiffeisen, ING)
+│   │       ├── mistral_categorizer.py   # Mistral/Ollama + rule-based categories
+│   │       └── transaction_anonymizer.py # Anonymize before storage
 │   ├── documents/           # Romanian financial PDFs (Knowledge Base)
 │   └── evals/
 │       └── sdg_and_evaluation.ipynb # SDG, RAGAS (baseline vs reranked), Agent evals
@@ -363,6 +421,10 @@ If Ollama is not available, the backend uses rule-based categorization; import s
 | `GET` | `/api/documents/` | List indexed documents |
 | `GET` | `/api/goals?user_id=` | List financial savings goals |
 | `POST` | `/api/goals` | Create a new financial goal |
+| `POST` | `/api/transactions/ingest` | Upload CSV bank statement (parse, categorize, anonymize, store) |
+| `GET` | `/api/transactions?user_id=&source_id=&from=&to=` | List anonymized transactions (optional filters) |
+| `GET` | `/api/transactions/sources?user_id=` | List upload sources |
+| `GET` | `/health/ollama` | Check Ollama connectivity for transaction categorization |
 
 Full API (sessions, users, goal CRUD): **http://localhost:8000/docs** (Swagger UI).
 
