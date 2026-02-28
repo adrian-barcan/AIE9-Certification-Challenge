@@ -51,34 +51,34 @@ High-level view of the system in three layers: what the user sees, where the log
   'edgeLabelBackground':'#ffffff', 'nodeBorder':'#1e293b', 'nodeTextColor':'#0f172a',
   'fontSize':'16px'
 }}}%%
-flowchart TB
+flowchart LR
     subgraph Presentation ["Presentation layer"]
-        WebApp["Next.js<br/>Chat · Goals"]
+        WebApp["Next.js<br/>Chat · Goals · Transactions"]
     end
 
     subgraph Application ["Application layer"]
         Backend["FastAPI"]
-        Agent["AI agent<br/>GPT-4o · conversation · routing"]
-        Backend --> Agent
+        Agent["AI agent<br/>GPT-4o · routing"]
     end
 
     subgraph Capabilities ["Agent capabilities"]
-        Docs["Document knowledge<br/>Financial docs, regulations"]
-        Market["Live market data<br/>Rates, news"]
-        Goals["User goals and memory<br/>Savings targets, conversation"]
-        Transactions["Transaction insights<br/>Savings by category (fees, shopping, transport, health)"]
+        Docs["Docs<br/>RAG · regulations"]
+        Market["Market<br/>Rates · news"]
+        Goals["Goals<br/>Savings · memory"]
+        Transactions["Transactions<br/>Savings by category"]
     end
 
     subgraph Data ["Data & external services"]
-        Qdrant["Qdrant<br/>Vectors"]
-        Cohere["Cohere<br/>Rerank"]
-        OpenAI["OpenAI<br/>GPT-4o · embeddings"]
-        Tavily["Tavily<br/>Search"]
-        Ollama["Ollama<br/>Mistral · transaction categorization"]
-        Postgres["PostgreSQL<br/>Goals · profile · memory"]
+        Qdrant["Qdrant"]
+        Cohere["Cohere"]
+        OpenAI["OpenAI"]
+        Tavily["Tavily"]
+        Postgres["PostgreSQL"]
+        Ollama["Ollama<br/>Mistral"]
     end
 
     WebApp --> Backend
+    Backend --> Agent
     Agent --> Docs
     Agent --> Market
     Agent --> Goals
@@ -87,13 +87,13 @@ flowchart TB
     Docs --> Cohere
     Docs --> OpenAI
     Market --> Tavily
-    Transactions -.-> Ollama
     Goals --> Postgres
     Transactions --> Postgres
-    Agent --> Postgres
+    Transactions -.-> Ollama
     Agent --> OpenAI
+    Agent --> Postgres
 
-    linkStyle 0,1,2,3,4,5,6,7,8,9,10,11,12,13 stroke:#1e293b,stroke-width:2px
+    linkStyle 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 stroke:#1e293b,stroke-width:2px
 ```
 
 See [README.md](README.md#-architecture) for detailed technical diagrams of the RAG pipeline, memory, and tool routing.
