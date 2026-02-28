@@ -268,7 +268,13 @@ cp .env.example .env
 # 2. Start all services using Docker Compose
 docker compose up --build
 
-# 3. Verify services are running
+# 3. Run the evaluation notebook (SDG + RAGAS + Agent evals)
+docker exec -it baniwise-backend jupyter notebook \
+  --ip=0.0.0.0 --port=8888 --no-browser --allow-root \
+  --NotebookApp.token='' --notebook-dir=/app
+# Then open http://localhost:8888 and navigate to evals/sdg_and_evaluation.ipynb
+
+# 4. Verify services are running
 open http://localhost:8000/docs   # FastAPI Swagger UI
 open http://localhost:3000        # Next.js Frontend
 ```
