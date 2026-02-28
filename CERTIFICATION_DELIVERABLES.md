@@ -36,66 +36,62 @@ Additionally, there is no Romanian-language AI financial assistant that combines
 
 BaniWise is a conversational financial assistant deployed as a web application. The frontend is a clean chat-first interface (Next.js 14) with a sidebar for navigation. Users ask questions in natural language (Romanian or English) and the agent draws on its document knowledge base, live web search, and the user's personal savings goals to provide contextually rich answers. A dedicated "Goals" tab allows users to create and track savings targets visually with progress bars and feasibility indicators. The agent includes automatic MiFID II disclaimers whenever investment products are discussed, and cites sources inline with page numbers.
 
-### Infrastructure Diagram
+### Architecture Diagram
+
+High-level view of the system in three layers: what the user sees, where the logic runs, and where data and external services live.
 
 ```mermaid
-flowchart TD
-    %% Styling
-    classDef frontend fill:#3b82f6,color:#fff,stroke:#1d4ed8,stroke-width:2px;
-    classDef backend fill:#10b981,color:#fff,stroke:#047857,stroke-width:2px;
-    classDef db fill:#f59e0b,color:#fff,stroke:#b45309,stroke-width:2px;
-    classDef external fill:#8b5cf6,color:#fff,stroke:#5b21b6,stroke-width:2px;
-    classDef docker fill:transparent,stroke:#94a3b8,stroke-width:2px,stroke-dasharray: 5 5;
-
-    %% Components
-    subgraph Docker ["🐳 Docker Compose (local)"]
-        direction LR
-        
-        NextJS["💻 Next.js<br>Frontend (:3000)"]:::frontend
-        
-        subgraph FastAPI ["⚡ FastAPI Backend (:8000)"]
-            direction TB
-            Supervisor{"🧠 LangGraph Supervisor<br>(GPT-4o)"}
-            
-            subgraph Tools ["Agent Tools"]
-                direction LR
-                RAG["rag_query"]
-                Market["market_search"]
-                Goals["goals_summary"]
-                Create["create_goal"]
-            end
-            
-            Supervisor --> Tools
-        end
-        
-        NextJS -- "SSE" --> FastAPI
-        
-        subgraph DBS ["Databases"]
-            direction LR
-            Postgres[("🐘 PostgreSQL<br>(Goals + Memory)")]:::db
-            Qdrant[("🔍 Qdrant<br>(Vectors)")]:::db
-        end
-        
-        FastAPI --> DBS
+%%{init: {'theme':'base', 'themeVariables': {
+  'primaryColor':'#fff', 'primaryTextColor':'#0f172a', 'primaryBorderColor':'#1e293b',
+  'secondaryColor':'#f8fafc', 'secondaryTextColor':'#0f172a', 'secondaryBorderColor':'#1e293b',
+  'tertiaryColor':'#f1f5f9', 'tertiaryTextColor':'#0f172a', 'tertiaryBorderColor':'#1e293b',
+  'lineColor':'#1e293b', 'secondaryLineColor':'#1e293b',
+  'background':'#ffffff', 'mainBkg':'#ffffff', 'secondBkg':'#f8fafc', 'tertiaryBkg':'#f1f5f9',
+  'clusterBkg':'#f8fafc', 'clusterBorder':'#1e293b', 'titleColor':'#0f172a',
+  'edgeLabelBackground':'#ffffff', 'nodeBorder':'#1e293b', 'nodeTextColor':'#0f172a',
+  'fontSize':'16px'
+}}}%%
+flowchart TB
+    subgraph Presentation ["Presentation layer"]
+        WebApp["Next.js<br/>Chat · Goals"]
     end
 
-    %% External APIs
-    subgraph APIs ["🌐 External APIs"]
-        direction LR
-        OpenAI("🤖 OpenAI API<br>GPT-4o/Embed"):::external
-        Tavily("🌐 Tavily<br>Search"):::external
-        Cohere("✍️ Cohere<br>Rerank"):::external
+    subgraph Application ["Application layer"]
+        Backend["FastAPI"]
+        Agent["AI agent<br/>GPT-4o · conversation · routing"]
+        Backend --> Agent
     end
 
-    %% Connections
-    Tools --> APIs
-    Qdrant --> Cohere
-    
-    %% Assign classes to subgraph borders
-    class Docker docker;
+    subgraph Capabilities ["Agent capabilities"]
+        Docs["Document knowledge<br/>Financial docs, regulations"]
+        Market["Live market data<br/>Rates, news"]
+        Goals["User goals and memory<br/>Savings targets, conversation"]
+    end
+
+    subgraph Data ["Data & external services"]
+        Qdrant["Qdrant<br/>Vectors"]
+        Cohere["Cohere<br/>Rerank"]
+        OpenAI["OpenAI<br/>GPT-4o · embeddings"]
+        Tavily["Tavily<br/>Search"]
+        Postgres["PostgreSQL<br/>Goals · profile · memory"]
+    end
+
+    WebApp --> Backend
+    Agent --> Docs
+    Agent --> Market
+    Agent --> Goals
+    Docs --> Qdrant
+    Docs --> Cohere
+    Docs --> OpenAI
+    Market --> Tavily
+    Goals --> Postgres
+    Agent --> Postgres
+    Agent --> OpenAI
+
+    linkStyle 0,1,2,3,4,5,6,7,8,9,10,11 stroke:#1e293b,stroke-width:2px
 ```
 
-See [README.md](README.md#-architecture) for detailed Mermaid diagrams of the RAG pipeline, CoALA memory, and tool routing.
+See [README.md](README.md#-architecture) for detailed technical diagrams of the RAG pipeline, memory, and tool routing.
 
 ### Technology Rationale
 
@@ -117,24 +113,28 @@ See [README.md](README.md#-architecture) for detailed Mermaid diagrams of the RA
 
 ### Data Sources
 
-**Local Document Knowledge Base** — 12 Romanian financial PDFs stored in `backend/documents/`:
+**Local document knowledge base** — 14 Romanian financial PDFs in `backend/documents/` (mounted at `/app/documents` in Docker). The RAG pipeline ingests these via the `/api/documents/ingest` endpoint (PyMuPDF loader, then ParentDocumentRetriever into Qdrant and in-memory docstore):
 
 | Document | Content |
 |---|---|
-| `ghidul_investitorului.pdf` | BVB Investor Guide (Romanian) |
-| `ghidul_investitorului_in_fonduri_de_investitii.pdf` | Mutual Funds Guide |
-| `ghid-ff-ro.pdf` | Financial Products Guide (RO) |
-| `ghid_etf_en.pdf` | ETF Guide (English) |
-| `ghidul_investitorului_retail_en.pdf` | Retail Investor Guide (EN) |
-| `capital_market_review_romania_en.pdf` | Capital Market Review |
-| `market_profile_romania_jan_2025_ro.pdf` | Romania Market Profile (Jan 2025) |
-| `legea_126_2018_rectificata.pdf` | Law 126/2018 (MiFID II transposition) |
-| `regulament_asf_bnr_10_4_2018.pdf` | ASF-BNR Regulation |
-| `Ghid_rezidenta_2023.pdf` | Tax Residency Guide |
+| `brosura_fidelis.pdf` | FIDELIS government bonds brochure |
+| `tezaur_ghid_2023.pdf` | TEZAUR guide (2023) |
+| `ghid_investitor_asf.pdf` | ASF investor guide |
+| `ghid_piata_capital_asf.pdf` | ASF capital market guide |
+| `ghid_investitor_titluri_stat_ue_2019.pdf` | EU state securities investor guide (2019) |
+| `legea_126_2018_piata_capital.pdf` | Law 126/2018 (capital market / MiFID II) |
+| `legea_24_2017_emitenti.pdf` | Law 24/2017 (issuers) |
+| `ordin_mf_330_tezaur.pdf` | Ministry of Finance order 330 (TEZAUR) |
+| `cod_bvb_operator_2022.pdf` | BVB operator code (2022) |
+| `cod_can_ats_2010.pdf` | CAN/ATS code (2010) |
+| `codul_fiscal_2026.pdf` | Fiscal code (2026) |
+| `info_preinvestitie_fonduri_mutuale_unicredit.pdf` | Mutual funds pre-investment info (UniCredit) |
+| `kid_etf_bet_brk_2026.pdf` | ETF KID BET BRK (2026) |
+| `termeni_conditii_ordine_unitati_fond.pdf` | Fund unit order terms and conditions |
 
-**External API** — [Tavily Search API](https://tavily.com) provides real-time financial data: current exchange rates, BVB stock prices, ongoing bond emissions (TEZAUR/FIDELIS currently available), and financial news.
+**External API** — [Tavily Search API](https://tavily.com) is used by the `market_search` tool for real-time financial data: exchange rates (e.g. EUR/RON), BVB-related prices, current bond emissions (TEZAUR/FIDELIS), and financial news.
 
-**How they interact:** The LangGraph Supervisor routes queries to the appropriate source. Questions about _how products work, regulations, or definitions_ go to `rag_query` (document search). Questions about _current prices, live data, or news_ go to `market_search` (Tavily). The agent can combine results from both tools when needed (e.g., "Is FIDELIS available today and how does it work?").
+**How they interact:** The Supervisor routes each query to the right source. _How products work, regulations, definitions_ → `rag_query` (document search over the PDFs above). _Current prices, live data, news_ → `market_search` (Tavily). The agent can call both in one turn when needed (e.g. “Is FIDELIS available today and how does it work?”).
 
 ### Chunking Strategy
 
