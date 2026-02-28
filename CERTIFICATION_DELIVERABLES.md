@@ -113,7 +113,7 @@ See [README.md](README.md#-architecture) for detailed technical diagrams of the 
 
 ### Data Sources
 
-**Local document knowledge base** — 14 Romanian financial PDFs in `backend/documents/` (mounted at `/app/documents` in Docker). The RAG pipeline ingests these via the `/api/documents/ingest` endpoint (PyMuPDF loader, then ParentDocumentRetriever into Qdrant and in-memory docstore):
+**Local document knowledge base** — 14 Romanian financial PDFs in `backend/documents/` (mounted at `/app/documents` in Docker). The RAG pipeline ingests these via the `/api/documents/ingest` endpoint (PyMuPDF loader, then ParentDocumentRetriever into Qdrant and an in-memory docstore persisted to `docstore.pkl` in the documents folder):
 
 | Document | Content |
 |---|---|
@@ -258,7 +258,7 @@ The evaluation notebook runs both pipelines on the same SDG-generated dataset an
 
 **Key finding:** The Cohere-reranked pipeline delivers a **massive +0.35 improvement in Context Precision** (0.57 → 0.92), meaning the LLM receives far more relevant chunks after reranking. The slight dip in faithfulness (-0.10) and recall (-0.08) reflects a natural precision-recall tradeoff: by being more selective (top_n=5 from top_k=10), the reranker occasionally filters out tangentially relevant content. The net effect is strongly positive for answer quality — the LLM generates more focused, accurate responses from better-curated context.
 
-> Run `docker compose exec backend jupyter notebook` → open `evals/sdg_and_evaluation.ipynb` → Kernel → Restart & Run All to reproduce.
+> To reproduce: `docker compose exec backend jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token='' --notebook-dir=/app`, then open http://localhost:8888 → `evals/sdg_and_evaluation.ipynb` → Kernel → Restart & Run All.
 
 ---
 
@@ -274,7 +274,7 @@ We will use the improved retrieval pipeline (ParentDocumentRetriever + BM25 + En
 3. Cohere's `rerank-multilingual-v3.0` model is specifically designed for non-English content, making it ideal for our Romanian financial documents.
 4. The added latency (~200–500ms for reranking) is acceptable for a chat-based UX where response quality is more important than millisecond-level speed.
 
-**Future improvements** (beyond Demo Day): query expansion/HyDE for short queries, moving DocStore and BM25 to PostgreSQL for multi-worker scaling, and background ingestion tasks. See [PLAN.md](PLAN.md) for the full improvement backlog.
+**Future improvements** (beyond Demo Day): query expansion/HyDE for short queries, moving DocStore and BM25 to PostgreSQL for multi-worker scaling, and background ingestion tasks.
 
 ---
 

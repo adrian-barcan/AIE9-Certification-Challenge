@@ -2,7 +2,7 @@
 
 **AI-powered financial assistant for Romanian investors** — built as a certification challenge for the AI Engineering Bootcamp (AIE9).
 
-This project demonstrates advanced mastery of **Retrieval-Augmented Generation (RAG)**, **Agentic Workflows (LangGraph)**, **Evaluations (RAGAS)**, and **Synthetic Data Generation**. 
+This project demonstrates advanced mastery of **Retrieval-Augmented Generation (RAG)**, **Agentic Workflows (LangGraph)**, **Evaluations (RAGAS)**, and **Synthetic Data Generation**. Written deliverables and task-by-task answers: **[CERTIFICATION_DELIVERABLES.md](CERTIFICATION_DELIVERABLES.md)**.
 
 ## 🧠 Core AI Technologies
 
@@ -239,7 +239,7 @@ flowchart TB
     Supervisor --> Response
 ```
 
-More detail (and export options) in **[`diagrams/`](diagrams/)**.
+Diagrams are defined in Mermaid in this README and in [CERTIFICATION_DELIVERABLES.md](CERTIFICATION_DELIVERABLES.md).
 
 
 ## 🛠 Tech Stack
@@ -252,31 +252,57 @@ More detail (and export options) in **[`diagrams/`](diagrams/)**.
 | **Embeddings** | OpenAI `text-embedding-3-small` |
 | **Reranking** | Cohere `rerank-multilingual-v3.0` |
 | **Web Search** | Tavily API |
-| **Evaluation Suite** | RAGAS (`ragas`) + JupyterSDG |
+| **Evaluation Suite** | RAGAS (`ragas`) + Jupyter notebook for SDG and evals |
 | **Backend API** | FastAPI (Python 3.11) |
 | **Frontend** | Next.js 14 + TypeScript + TailwindCSS |
 | **Relational DB** | PostgreSQL 16 (sqlalchemy / asyncpg) |
 
 ---
 
+## Prerequisites
+
+- **Docker** and **Docker Compose** (recommended: run everything in containers).
+- For local development without Docker: **Python 3.11**, **Node 18+**, and a `.env` file with the required API keys.
+
+## Environment variables
+
+Copy the template and set your API keys:
+
+```bash
+cp .env.example .env
+```
+
+Required for the agent and RAG:
+
+| Variable | Description |
+|----------|--------------|
+| `OPENAI_API_KEY` | OpenAI API key (Supervisor + embeddings) |
+| `COHERE_API_KEY` | Cohere API key (reranking) |
+| `TAVILY_API_KEY` | Tavily API key (market search) |
+
+Optional: `LANGSMITH_API_KEY` (tracing), `POSTGRES_*` / `DATABASE_URL`, `QDRANT_*`. See [.env.example](.env.example) for defaults.
+
 ## 🚀 Quick Start
 
 ```bash
-# 1. Copy environment template and add your API keys (OpenAI, Cohere, Tavily)
+# 1. Copy environment template and add your API keys (see Environment variables above)
 cp .env.example .env
 
 # 2. Start all services using Docker Compose
 docker compose up --build
 
 # 3. Run the evaluation notebook (SDG + RAGAS + Agent evals)
-docker exec -it baniwise-backend jupyter notebook \
+docker compose exec backend jupyter notebook \
   --ip=0.0.0.0 --port=8888 --no-browser --allow-root \
   --NotebookApp.token='' --notebook-dir=/app
-# Then open http://localhost:8888 and navigate to evals/sdg_and_evaluation.ipynb
+# Then open http://localhost:8888 and navigate to evals/sdg_and_evaluation.ipynb → Kernel → Restart & Run All
 
-# 4. Verify services are running
-open http://localhost:8000/docs   # FastAPI Swagger UI
-open http://localhost:3000        # Next.js Frontend
+# 4. Verify services are running (open in your browser)
+#    http://localhost:8000/docs   — FastAPI Swagger UI
+#    http://localhost:3000       — Next.js Frontend
+
+# 5. Ingest documents so the agent can answer from the financial PDFs
+#    POST http://localhost:8000/api/documents/ingest  (or use the Documents tab in the UI)
 ```
 
 ## 📁 Project Structure
@@ -285,18 +311,19 @@ open http://localhost:3000        # Next.js Frontend
 ├── backend/
 │   ├── app/
 │   │   ├── main.py          # FastAPI application entry point
-│   │   ├── api/             # REST API routers (chat, goals, docs, users)
+│   │   ├── config.py        # Settings (env vars, RAG/LLM config)
+│   │   ├── database.py      # SQLAlchemy async engine and tables
+│   │   ├── api/             # REST API routers (chat, goals, documents, users)
 │   │   ├── models/          # SQLAlchemy ORM models
 │   │   ├── schemas.py       # Pydantic validation schemas
 │   │   └── services/
-│   │       ├── agent_service.py # LangGraph Supervisor & CoALA Memory
-│   │       ├── rag_service.py   # Qdrant + Cohere Contextual Compression
-│   │       └── goals_service.py # Financial PostgreSQL logic
+│   │       ├── agent_service.py  # LangGraph Supervisor & CoALA Memory
+│   │       ├── rag_service.py    # Qdrant + Cohere contextual compression
+│   │       ├── goals_service.py  # Financial goals (PostgreSQL)
+│   │       └── memory_service.py # Conversation summarization
 │   ├── documents/           # Romanian financial PDFs (Knowledge Base)
 │   └── evals/
-│       ├── sdg_and_evaluation.ipynb # Full SDG + Eval interactive walkthrough
-│       ├── eval_rag.py      # Automated RAGAS baseline vs reranked tests
-│       └── eval_agent.py    # Automated Agent routing & compliance tests
+│       └── sdg_and_evaluation.ipynb # SDG, RAGAS (baseline vs reranked), Agent evals
 ├── frontend/                # Next.js 14 Chat & Goals UI
 ├── docker-compose.yml       # Production-ready container orchestration
 └── .env.example
@@ -305,12 +332,15 @@ open http://localhost:3000        # Next.js Frontend
 ## 🔌 Core API Endpoints
 
 | Method | Endpoint | Description |
-|---|---|---|
-| `POST` | `/api/chat` | Streaming endpoint chatting directly with the LangGraph Agent |
-| `GET` | `/api/chat/history/{session_id}` | Retrieves CoALA Short-Term memory history |
-| `POST` | `/api/documents/ingest` | Triggers the RAG Pipeline to chunk and embed new PDFs |
-| `GET` | `/api/goals?user_id=` | Fetches financial savings goals from PostgreSQL |
-| `POST` | `/api/goals?user_id=` | Creates a new financial goal |
+|--------|----------|-------------|
+| `POST` | `/api/chat` | Streaming chat with the LangGraph Agent |
+| `GET` | `/api/chat/history/{session_id}` | CoALA short-term memory history |
+| `POST` | `/api/documents/ingest` | Ingest PDFs into the RAG pipeline |
+| `GET` | `/api/documents/` | List indexed documents |
+| `GET` | `/api/goals?user_id=` | List financial savings goals |
+| `POST` | `/api/goals` | Create a new financial goal |
+
+Full API (sessions, users, goal CRUD): **http://localhost:8000/docs** (Swagger UI).
 
 ## 📜 License
 
