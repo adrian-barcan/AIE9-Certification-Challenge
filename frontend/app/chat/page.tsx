@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { useUser } from "@/lib/UserContext";
 import { useLanguage } from "@/lib/LanguageContext";
 import { sendMessageStream, getChatSessions, getChatHistory, createChatSession, deleteChatSession, updateChatSession, ChatSession } from "@/lib/api";
@@ -14,6 +15,7 @@ interface Message {
 }
 
 export default function ChatPage() {
+    const searchParams = useSearchParams();
     const { user } = useUser();
     const { t } = useLanguage();
 
@@ -25,6 +27,14 @@ export default function ChatPage() {
     }, [t]);
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState("");
+
+    // Prefill input from ?q= (e.g. from Transactions "Ask BaniWise where I can save")
+    useEffect(() => {
+        const q = searchParams.get("q");
+        if (q && decodeURIComponent(q).trim()) {
+            setInput(decodeURIComponent(q).trim());
+        }
+    }, [searchParams]);
     const [isStreaming, setIsStreaming] = useState(false);
     const [streamingStatus, setStreamingStatus] = useState<string | null>(null);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);

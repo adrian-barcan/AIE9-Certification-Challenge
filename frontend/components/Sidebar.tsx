@@ -20,6 +20,7 @@ export default function Sidebar() {
     const navItems = [
         { href: "/chat", icon: <Image src="/chat_icon.png" alt="Chat" width={22} height={22} />, label: t("nav_chat") },
         { href: "/goals", icon: <Image src="/goals_icon.png" alt="Goals" width={22} height={22} />, label: t("nav_goals") },
+        { href: "/transactions", icon: <Image src="/docs_icon.png" alt="Transactions" width={22} height={22} />, label: t("nav_transactions") },
         { href: "/documents", icon: <Image src="/docs_icon.png" alt="Documents" width={22} height={22} />, label: t("nav_documents") },
     ];
 

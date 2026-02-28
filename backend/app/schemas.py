@@ -136,3 +136,40 @@ class IngestResponse(BaseModel):
     documents_processed: int
     total_chunks: int
     collection: str
+
+
+# === Transaction Schemas ===
+
+class TransactionSourceResponse(BaseModel):
+    """Response schema for a transaction source (no sensitive data)."""
+    id: uuid.UUID
+    user_id: uuid.UUID
+    bank_label: str
+    imported_at: datetime
+    format: str
+    transaction_count: Optional[int] = None
+
+    model_config = {"from_attributes": True}
+
+
+class TransactionResponse(BaseModel):
+    """Response schema for a single anonymized transaction."""
+    id: uuid.UUID
+    user_id: uuid.UUID
+    source_id: uuid.UUID
+    date: datetime
+    amount: float
+    currency: str
+    category: str
+    is_recurring: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class TransactionIngestResponse(BaseModel):
+    """Response schema after uploading a CSV."""
+    source_id: uuid.UUID
+    transactions_imported: int
+    bank_label: str
+    categorization_source: str = "rules"  # "ollama" if Mistral was used, "rules" if fallback

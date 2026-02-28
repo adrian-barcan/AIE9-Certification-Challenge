@@ -66,6 +66,11 @@ class Settings(BaseSettings):
     # === Documents ===
     documents_path: str = Field(default="/app/documents", description="Path to financial PDFs")
 
+    # === Transactions (Ollama + anonymization) ===
+    ollama_base_url: str = Field(default="http://ollama:11434", description="Ollama API base URL for Mistral")
+    mistral_model: str = Field(default="mistral", description="Ollama model name for categorization")
+    anonymization_salt: str = Field(default="baniwise-transaction-salt", description="Salt for hashing account IDs (set in production)")
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

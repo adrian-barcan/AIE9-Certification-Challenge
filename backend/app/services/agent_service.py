@@ -68,11 +68,13 @@ You have access to the following tools:
 - rag_query: Search Romanian financial documents (regulations, TEZAUR, FIDELIS, BVB guides)
 - market_search: Search for live market data, exchange rates, financial news
 - goals_summary: Get the user's current financial goals and progress
+- savings_insights: Get anonymized spending summary (by category, recurring, fees) to suggest where the user can save
 
 Route queries to the right tool:
 - Questions about HOW financial products work, historical data, regulations, definitions → rag_query
 - Questions about CURRENT prices, ONGOING/OPEN subscriptions (e.g., TEZAUR/FIDELIS available TODAY), exchange rates, news → market_search
 - Questions about the user's goals, savings progress → goals_summary
+- Questions about where to save, spending habits, subscriptions, bank fees, or transaction-based saving opportunities → savings_insights
 - General financial advice → combine knowledge from tools as needed
 
 {user_context}
@@ -92,6 +94,7 @@ TOOL_STATUS_MESSAGES = {
     "market_search": "Searching market data…",
     "goals_summary": "Loading your goals…",
     "create_goal": "Creating goal…",
+    "savings_insights": "Analyzing your spending…",
 }
 
 # ===================================================================
@@ -180,6 +183,33 @@ async def goals_summary(user_id: str) -> str:
 
 
 @tool
+async def savings_insights(user_id: str) -> str:
+    """Get anonymized spending summary to suggest where the user can save money.
+
+    Use this tool when the user asks about: where they can save, spending habits,
+    subscriptions, bank fees, or saving opportunities based on their transaction history.
+    Returns only category-level aggregates (no raw descriptions or account data).
+
+    Args:
+        user_id: The user's UUID as a string.
+
+    Returns:
+        Anonymized summary: spending by category, recurring outflows, bank fees.
+    """
+    try:
+        from app.database import async_session
+        from app.services.transaction_service import TransactionService
+
+        async with async_session() as db:
+            service = TransactionService(db)
+            summary = await service.get_savings_insights_summary(uuid.UUID(user_id))
+            return summary
+    except Exception as e:
+        logger.error(f"Savings insights failed: {e}")
+        return f"Could not retrieve spending summary. (Details: {e})"
+
+
+@tool
 async def create_goal(
     user_id: str,
     name: str,
@@ -257,7 +287,7 @@ class AgentService:
             temperature=0.3,
             streaming=True,
         )
-        self.tools = [rag_query, market_search, goals_summary, create_goal]
+        self.tools = [rag_query, market_search, goals_summary, savings_insights, create_goal]
         self.pool = None
         self.checkpointer = None
         self.store = None

@@ -282,6 +282,8 @@ Required for the agent and RAG:
 
 Optional: `LANGSMITH_API_KEY` (tracing), `POSTGRES_*` / `DATABASE_URL`, `QDRANT_*`. See [.env.example](.env.example) for defaults.
 
+**Optional: Ollama (Mistral) for transaction categorization** — When you upload CSV transactions, the app can use a local Mistral model via Ollama to categorize them (no data sent to the cloud). If Ollama is not running, it falls back to rule-based categorization. See [Optional: Ollama + Mistral](#optional-ollama--mistral) below.
+
 ## 🚀 Quick Start
 
 ```bash
@@ -304,6 +306,28 @@ docker compose exec backend jupyter notebook \
 # 5. Ingest documents so the agent can answer from the financial PDFs
 #    POST http://localhost:8000/api/documents/ingest  (or use the Documents tab in the UI)
 ```
+
+### Optional: Ollama + Mistral
+
+To use **Mistral** for transaction categorization (Transactions → upload CSV):
+
+**Option A — Ollama on your machine (recommended; more RAM/CPU for the model)**
+
+1. Install [Ollama](https://ollama.com) on your Mac and start it (menu bar or `ollama serve`).
+2. Pull the model (one-time): `ollama pull mistral`
+3. In `.env` set so the backend container can reach the host:
+   ```bash
+   OLLAMA_BASE_URL=http://host.docker.internal:11434
+   ```
+4. Do **not** start the `ollama` service in Compose (or leave it stopped). Run only: `docker compose up -d backend frontend postgres qdrant`
+
+**Option B — Ollama in Docker**
+
+1. Start Ollama: `docker compose up -d ollama`
+2. Pull the model: `docker compose exec ollama ollama pull mistral`
+3. Leave `OLLAMA_BASE_URL` unset (default `http://ollama:11434`) or set it explicitly.
+
+If Ollama is not available, the backend uses rule-based categorization; import still works.
 
 ## 📁 Project Structure
 

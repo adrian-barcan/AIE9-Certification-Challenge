@@ -1,16 +1,10 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import AppShell from "@/components/AppShell";
 import { UserProvider } from "@/lib/UserContext";
 import { LanguageProvider } from "@/lib/LanguageContext";
 import { ThemeProvider } from "@/lib/ThemeContext";
 import Providers from "./providers";
-
-const inter = Inter({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: "BaniWise — Asistent Financiar Personal",
@@ -24,7 +18,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ro" className="dark">
-      <body className={`${inter.variable} antialiased`}>
+      <body className="antialiased font-sans" style={{ fontFamily: "var(--font-sans, ui-sans-serif, system-ui, sans-serif, 'Segoe UI', Roboto, sans-serif)" }}>
         <ThemeProvider>
           <Providers>
             <UserProvider>

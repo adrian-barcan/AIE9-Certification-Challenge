@@ -257,9 +257,9 @@ export default function GoalsPage() {
                                         <span className="text-[10px] font-bold text-[var(--text-muted)]">{formData.currency || "RON"}</span>
                                     </div>
                                 </div>
-                                {formData.target_amount > 0 && formData.monthly_contribution > 0 && (
+                                {formData.target_amount > 0 && (formData.monthly_contribution ?? 0) > 0 && (
                                     <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400 font-medium animate-fade-in">
-                                        ✨ {t("goals_form_eta")} {Math.ceil(formData.target_amount / formData.monthly_contribution)} {t("goals_months")}!
+                                        ✨ {t("goals_form_eta")} {Math.ceil(formData.target_amount / (formData.monthly_contribution ?? 1))} {t("goals_months")}!
                                     </p>
                                 )}
                             </div>

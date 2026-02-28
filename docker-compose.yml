@@ -58,6 +58,18 @@ services:
       - qdrant_data:/qdrant/storage
     restart: unless-stopped
 
+  # === Ollama (optional: Mistral for transaction categorization) ===
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    # Uncomment to always run; backend falls back to rules if Ollama is down
+    # profiles: [] 
+
 volumes:
   pgdata:
   qdrant_data:
+  ollama_data:
