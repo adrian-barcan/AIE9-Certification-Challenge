@@ -2,7 +2,7 @@
 
 **AI-powered financial assistant for Romanian investors** — built as a certification challenge for the AI Engineering Bootcamp (AIE9).
 
-This project demonstrates advanced mastery of **Retrieval-Augmented Generation (RAG)**, **Agentic Workflows (LangGraph)**, **Evaluations (RAGAS)**, and **Synthetic Data Generation**. Written deliverables and task-by-task answers: **[CERTIFICATION_DELIVERABLES.md](CERTIFICATION_DELIVERABLES.md)**.
+This project demonstrates advanced mastery of **Retrieval-Augmented Generation (RAG)**, **Agentic Workflows (LangGraph)**, **Evaluations (RAGAS)**, and **Synthetic Data Generation**. Written deliverables and task-by-task answers: **[CERTIFICATION_DELIVERABLES.md](deliverables/CERTIFICATION_DELIVERABLES.md)**.
 
 ## 🧠 Core AI Technologies
 
@@ -293,7 +293,7 @@ flowchart LR
 | **Health** | `PHARMACY_HEALTH`, `DOCTOR_AND_CLINIC`, `DENTAL_HEALTH`, `OPTICS_HEALTH`, `HEALTH_INSURANCE`, `OTHER_HEALTH` |
 | **Other** | `SUBSCRIPTION`, `GROCERIES`, `DINING`, `UTILITIES`, `OTHER` |
 
-Diagrams are defined in Mermaid in this README and in [CERTIFICATION_DELIVERABLES.md](CERTIFICATION_DELIVERABLES.md).
+Diagrams are defined in Mermaid in this README and in [CERTIFICATION_DELIVERABLES.md](deliverables/CERTIFICATION_DELIVERABLES.md).
 
 
 ## 🛠 Tech Stack

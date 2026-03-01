@@ -212,7 +212,7 @@ export default function GoalsPage() {
 
                             <div>
                                 <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">
-                                    {t("modal_target")}
+                                    {t("modal_target_label")} ({formData.currency || "RON"})
                                 </label>
                                 <div className="relative">
                                     <input
@@ -237,7 +237,7 @@ export default function GoalsPage() {
 
                             <div>
                                 <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">
-                                    {t("modal_monthly")}
+                                    {t("modal_monthly_label")} ({formData.currency || "RON"})
                                 </label>
                                 <div className="relative">
                                     <input

@@ -6,12 +6,12 @@ Supports streaming responses via Server-Sent Events (SSE).
 
 import json
 import logging
-
 import uuid
 import traceback
-from sqlalchemy import select
-from fastapi import APIRouter, Depends, HTTPException
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -22,6 +22,15 @@ from app.services.agent_service import agent_service
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
+
+
+async def _get_session_or_404(session_id: str, db: AsyncSession) -> ChatSession:
+    """Return the chat session if found and belonging to the current context; else raise 404."""
+    result = await db.execute(select(ChatSession).where(ChatSession.id == session_id))
+    session = result.scalars().first()
+    if not session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    return session
 
 
 @router.post("/")
@@ -77,6 +86,9 @@ async def chat_sync(data: ChatRequest) -> dict:
 
     Returns:
         Dict with the full agent response.
+
+    Raises:
+        HTTPException: 503 if the agent is temporarily unavailable.
     """
     try:
         response = await agent_service.chat(
@@ -86,8 +98,11 @@ async def chat_sync(data: ChatRequest) -> dict:
         )
         return {"response": response}
     except Exception as e:
-        logger.error(f"Chat error: {e}")
-        return {"error": str(e)}
+        logger.exception("Chat sync error: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Agent temporarily unavailable. Please try again.",
+        ) from e
 
 
 @router.get("/history/{session_id}")
@@ -130,12 +145,7 @@ async def create_chat_session(data: ChatSessionCreate, db: AsyncSession = Depend
 @router.patch("/sessions/{session_id}", response_model=ChatSessionResponse)
 async def update_chat_session(session_id: str, data: ChatSessionUpdate, db: AsyncSession = Depends(get_db)):
     """Update a chat session (e.g. title)."""
-    result = await db.execute(select(ChatSession).where(ChatSession.id == session_id))
-    session = result.scalars().first()
-    
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-        
+    session = await _get_session_or_404(session_id, db)
     session.title = data.title
     await db.commit()
     await db.refresh(session)
@@ -145,12 +155,7 @@ async def update_chat_session(session_id: str, data: ChatSessionUpdate, db: Asyn
 @router.delete("/sessions/{session_id}")
 async def delete_chat_session(session_id: str, db: AsyncSession = Depends(get_db)):
     """Delete a chat session."""
-    result = await db.execute(select(ChatSession).where(ChatSession.id == session_id))
-    session = result.scalars().first()
-    
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-        
+    session = await _get_session_or_404(session_id, db)
     await db.delete(session)
     await db.commit()
     return {"status": "deleted"}

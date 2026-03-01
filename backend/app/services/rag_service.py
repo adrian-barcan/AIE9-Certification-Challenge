@@ -157,9 +157,11 @@ class RAGService:
 
         if not need_ingest:
             logger.info("Documents already ingested and states loaded.")
+            info = self._qdrant_client.get_collection(settings.qdrant_collection)
             return {
                 "documents_processed": len(pdf_files),
-                "status": "already_ingested"
+                "total_chunks": info.points_count,
+                "collection": settings.qdrant_collection,
             }
 
         logger.info(f"Ingesting {len(pdf_files)} PDF files...")
@@ -208,10 +210,11 @@ class RAGService:
         # Persist states
         self._save_bm25(folder_path)
 
+        info = self._qdrant_client.get_collection(settings.qdrant_collection)
         summary = {
             "documents_processed": len(pdf_files),
+            "total_chunks": info.points_count,
             "collection": settings.qdrant_collection,
-            "status": "ingested"
         }
         logger.info(f"Ingestion complete: {summary}")
         return summary

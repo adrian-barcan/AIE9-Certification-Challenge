@@ -26,6 +26,9 @@ services:
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules  # keep image node_modules so mount doesn't overwrite
     depends_on:
       - backend
     restart: unless-stopped
@@ -42,10 +45,11 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-financial_agent}" ]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-financial_agent} -h 127.0.0.1 || exit 1" ]
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 15s
     restart: unless-stopped
 
   # === Qdrant (Vector Database) ===

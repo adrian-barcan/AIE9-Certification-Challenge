@@ -113,6 +113,12 @@ See [README.md](README.md#-architecture) for detailed technical diagrams of the 
 | **UI** | Next.js 14 (App Router) + TypeScript + TailwindCSS | Production-grade React framework with SSR, streaming support for SSE chat, and a component-based architecture. |
 | **Deployment** | Docker Compose | Orchestrates all 4 services (backend, frontend, PostgreSQL, Qdrant) with a single `docker compose up` command. |
 
+### RAG and Agent Components (Exactly)
+
+**RAG components:** (1) **Document store** — Romanian financial PDFs in `backend/documents/`, loaded via PyMuPDF. (2) **Chunking** — ParentDocumentRetriever with RecursiveCharacterTextSplitter (parent 2000 chars, child 400 chars). (3) **Embeddings** — OpenAI `text-embedding-3-small`. (4) **Vector store** — Qdrant; child chunks are embedded and stored there; parent chunks live in an in-memory docstore (persisted as `docstore.pkl`). (5) **Retrievers** — ParentDocumentRetriever (small-to-big), BM25Retriever (sparse), EnsembleRetriever (BM25 + vector, 0.3/0.7), ContextualCompressionRetriever with CohereRerank (`rerank-multilingual-v3.0`). (6) **RAG tool** — The `rag_query` tool calls this pipeline and returns formatted context to the LLM.
+
+**Agent components:** (1) **Orchestrator** — LangGraph Supervisor (GPT-4o, `create_react_agent`), which decides which tools to call. (2) **Tools** — `rag_query` (document search), `market_search` (Tavily for rates/news), `goals_summary` (read user goals from PostgreSQL), `create_goal` (create savings goals), `savings_insights` (anonymized transaction analysis by category). (3) **Memory** — CoALA-style: short-term (AsyncPostgresSaver per thread), long-term (AsyncPostgresStore profile), semantic (AsyncPostgresStore knowledge); rolling summarization when history exceeds 100 messages. (4) **Routing** — The Supervisor inspects the user message and invokes one or more tools; results are passed back into the graph for the final answer.
+
 ---
 
 ## Task 3: Dealing with the Data
@@ -200,7 +206,7 @@ Five curated question–answer pairs focusing on Romanian government bonds (TEZA
 | 4 | Cum se pot achiziționa titlurile FIDELIS? | Listed on BVB, bought via secondary market, fixed semi-annual coupon. |
 | 5 | Ce maturități au titlurile de stat românești? | 1, 3, or 5 years. FIDELIS available in RON or EUR. |
 
-Additionally, the SDG notebook (`backend/evals/sdg_and_evaluation.ipynb`) uses RAGAS `TestsetGenerator` to programmatically generate Simple, Multi-Context, and Reasoning questions from the raw PDFs.
+Additionally, the SDG notebook (`backend/notebooks/sdg_and_evaluation.ipynb`) uses RAGAS `TestsetGenerator` to programmatically generate Simple, Multi-Context, and Reasoning questions from the raw PDFs.
 
 ### RAGAS Metrics Evaluated
 
@@ -211,7 +217,7 @@ Additionally, the SDG notebook (`backend/evals/sdg_and_evaluation.ipynb`) uses R
 
 ### Evaluation Implementation
 
-The evaluation runs via the Jupyter notebook `backend/evals/sdg_and_evaluation.ipynb`, which:
+The evaluation runs via the Jupyter notebook `backend/notebooks/sdg_and_evaluation.ipynb`, which:
 1. Loads two target PDFs (`brosura_fidelis.pdf`, `tezaur_ghid_2023.pdf`)
 2. Uses RAGAS `TestsetGenerator` (GPT-4o-mini) to generate 10 synthetic evaluation questions
 3. Falls back to 5 manually curated questions if SDG fails
@@ -264,7 +270,7 @@ The evaluation notebook runs both pipelines on the same SDG-generated dataset an
 
 **Key finding:** The Cohere-reranked pipeline delivers a **massive +0.35 improvement in Context Precision** (0.57 → 0.92), meaning the LLM receives far more relevant chunks after reranking. The slight dip in faithfulness (-0.10) and recall (-0.08) reflects a natural precision-recall tradeoff: by being more selective (top_n=5 from top_k=10), the reranker occasionally filters out tangentially relevant content. The net effect is strongly positive for answer quality — the LLM generates more focused, accurate responses from better-curated context.
 
-> To reproduce: `docker compose exec backend jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token='' --notebook-dir=/app`, then open http://localhost:8888 → `evals/sdg_and_evaluation.ipynb` → Kernel → Restart & Run All.
+> To reproduce: `docker compose exec backend jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token='' --notebook-dir=/app`, then open http://localhost:8888 → `notebooks/sdg_and_evaluation.ipynb` → Kernel → Restart & Run All.
 
 ---
 
@@ -313,6 +319,6 @@ Scenario 3 scores 0.65 because the demo user has no saved goals, so the response
 |---|---|
 | Source Code | This GitHub repository |
 | Written Deliverables | This file (`CERTIFICATION_DELIVERABLES.md`) |
-| Architecture Diagrams | [README.md](README.md#-architecture) (Mermaid) |
-| SDG + RAG + Agent Evaluation | [sdg_and_evaluation.ipynb](backend/evals/sdg_and_evaluation.ipynb) |
+| Architecture Diagrams | [README.md](../README.md#-architecture) (Mermaid) |
+| SDG + RAG + Agent Evaluation | [sdg_and_evaluation.ipynb](../backend/notebooks/sdg_and_evaluation.ipynb) |
 | Loom Video | *(link to be added)* |

@@ -18,7 +18,13 @@ Usage:
 import logging
 import uuid
 from datetime import datetime
-from typing import Annotated, Any, AsyncGenerator, Literal, Optional, Sequence, Union
+from typing import Any, AsyncGenerator, Union
+
+# Message type and ID constants for history trimming (avoid magic strings)
+MESSAGE_TYPE_HUMAN = "human"
+MESSAGE_TYPE_AI = "ai"
+SYSTEM_MSG_ID_PREFIX = "sys_"
+SEMANTIC_MEMORY_ITEMS_LIMIT = 5
 
 from langchain_core.messages import (
     AIMessage,
@@ -31,7 +37,6 @@ from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.store.postgres.aio import AsyncPostgresStore
-from langgraph.graph import END, StateGraph, add_messages
 from langgraph.prebuilt import create_react_agent
 from psycopg_pool import AsyncConnectionPool
 from tavily import AsyncTavilyClient
@@ -343,8 +348,8 @@ class AgentService:
             if summary_item and summary_item.value.get("content"):
                 parts.append("Conversation Summary So Far:")
                 parts.append(summary_item.value["content"])
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Could not load conversation summary: %s", e)
 
         # Long-term memory: user profile
         profile_namespace = (user_id, "profile")
@@ -354,8 +359,8 @@ class AgentService:
                 parts.append("User Profile:")
                 for item in profile_items:
                     parts.append(f"  - {item.key}: {item.value}")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Could not load user profile from store: %s", e)
 
         # Semantic memory: learned financial knowledge
         knowledge_namespace = (user_id, "knowledge")
@@ -363,10 +368,10 @@ class AgentService:
             knowledge_items = await self.store.asearch(knowledge_namespace)
             if knowledge_items:
                 parts.append("Known Financial Context:")
-                for item in knowledge_items[:5]:  # Limit to top 5
+                for item in knowledge_items[:SEMANTIC_MEMORY_ITEMS_LIMIT]:
                     parts.append(f"  - {item.value.get('fact', '')}")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Could not load semantic memory: %s", e)
 
         if parts:
             return "USER CONTEXT:\n" + "\n".join(parts)
@@ -385,6 +390,74 @@ class AgentService:
         namespace = (user_id, "profile")
         await self.store.aput(namespace, key, {"value": value})
 
+    async def _prepare_turn(
+        self, message: str, user_id: str, session_id: str = "default"
+    ) -> tuple[dict, dict]:
+        """Build input_messages and config for one chat turn, trimming history and updating summary if needed.
+
+        Returns:
+            (input_messages, config) ready for ainvoke or astream_events.
+        """
+        user_context = await self._get_user_context(user_id, session_id)
+        current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        system_prompt = SUPERVISOR_SYSTEM_PROMPT.format(
+            user_context=user_context,
+            user_id=user_id,
+            current_date=current_date,
+        )
+        config = {
+            "configurable": {
+                "thread_id": session_id,
+                "user_id": user_id,
+            }
+        }
+
+        try:
+            state = await self.graph.aget_state(config)
+            existing_messages = state.values.get("messages", [])
+        except Exception as e:
+            logger.warning("Could not load agent state for trimming: %s", e)
+            existing_messages = []
+
+        trim_messages: list[RemoveMessage] = []
+        messages_to_summarize: list[BaseMessage] = []
+        if len(existing_messages) > settings.chat_history_limit:
+            keep_idx = len(existing_messages) - settings.chat_history_limit
+            while keep_idx > 0 and existing_messages[keep_idx].type == "tool":
+                keep_idx -= 1
+            for m in existing_messages[:keep_idx]:
+                if hasattr(m, "id") and m.id and not str(m.id).startswith(SYSTEM_MSG_ID_PREFIX):
+                    trim_messages.append(RemoveMessage(id=m.id))
+                    if m.type in (MESSAGE_TYPE_HUMAN, MESSAGE_TYPE_AI) and getattr(m, "content", None):
+                        messages_to_summarize.append(m)
+
+        if messages_to_summarize:
+            summary_namespace = (user_id, "summary", session_id)
+            current_summary = ""
+            try:
+                summary_item = await self.store.aget(summary_namespace, "current_summary")
+                if summary_item:
+                    current_summary = summary_item.value.get("content", "")
+            except Exception as e:
+                logger.debug("Could not load current summary for consolidation: %s", e)
+            new_summary = await memory_service.summarize_messages(messages_to_summarize, current_summary)
+            if new_summary:
+                await self.store.aput(summary_namespace, "current_summary", {"content": new_summary})
+                user_context = await self._get_user_context(user_id, session_id)
+                system_prompt = SUPERVISOR_SYSTEM_PROMPT.format(
+                    user_context=user_context,
+                    user_id=user_id,
+                    current_date=current_date,
+                )
+
+        input_messages = {
+            "messages": trim_messages + [
+                SystemMessage(content=system_prompt, id=f"{SYSTEM_MSG_ID_PREFIX}{user_id}"),
+                HumanMessage(content=message),
+            ]
+        }
+        return input_messages, config
+
     async def chat(
         self,
         message: str,
@@ -401,71 +474,7 @@ class AgentService:
         Returns:
             The agent's response text.
         """
-        user_context = await self._get_user_context(user_id, session_id)
-        system_prompt = SUPERVISOR_SYSTEM_PROMPT.format(
-            user_context=user_context, 
-            user_id=user_id,
-            current_date=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        )
-
-        config = {
-            "configurable": {
-                "thread_id": session_id,
-                "user_id": user_id,
-            }
-        }
-
-        # Truncate history to avoid token overflow
-        try:
-            state = await self.graph.aget_state(config)
-            existing_messages = state.values.get("messages", [])
-        except Exception:
-            existing_messages = []
-
-        trim_messages = []
-        messages_to_summarize = []
-        if len(existing_messages) > settings.chat_history_limit:
-            keep_idx = len(existing_messages) - settings.chat_history_limit
-            while keep_idx > 0 and existing_messages[keep_idx].type == "tool":
-                keep_idx -= 1
-            
-            # Extract messages that are about to drop out of the context window
-            for m in existing_messages[:keep_idx]:
-                if hasattr(m, "id") and m.id and not str(m.id).startswith("sys_"):
-                    trim_messages.append(RemoveMessage(id=m.id))
-                    # Only summarize Human/Assistant messages to save tokens and noise
-                    if m.type in ["human", "ai"] and m.content:
-                        messages_to_summarize.append(m)
-
-        # Update the rolling summary if there are messages falling out of context
-        if messages_to_summarize:
-            summary_namespace = (user_id, "summary", session_id)
-            current_summary = ""
-            try:
-                summary_item = await self.store.aget(summary_namespace, "current_summary")
-                if summary_item:
-                    current_summary = summary_item.value.get("content", "")
-            except Exception:
-                pass
-                
-            new_summary = await memory_service.summarize_messages(messages_to_summarize, current_summary)
-            if new_summary:
-                await self.store.aput(summary_namespace, "current_summary", {"content": new_summary})
-                # Reload context since we just updated the summary
-                user_context = await self._get_user_context(user_id, session_id)
-                system_prompt = SUPERVISOR_SYSTEM_PROMPT.format(
-                    user_context=user_context,
-                    user_id=user_id,
-                    current_date=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                )
-
-        input_messages = {
-            "messages": trim_messages + [
-                SystemMessage(content=system_prompt, id=f"sys_{user_id}"),
-                HumanMessage(content=message),
-            ]
-        }
-
+        input_messages, config = await self._prepare_turn(message, user_id, session_id)
         response = await self.graph.ainvoke(input_messages, config=config)
         # Extract the last AI message
         ai_messages = [
@@ -495,72 +504,7 @@ class AgentService:
         Yields:
             Either a content string or a dict with "token" or "status" key.
         """
-        user_context = await self._get_user_context(user_id, session_id)
-        system_prompt = SUPERVISOR_SYSTEM_PROMPT.format(
-            user_context=user_context, 
-            user_id=user_id,
-            current_date=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        )
-
-        config = {
-            "configurable": {
-                "thread_id": session_id,
-                "user_id": user_id,
-            }
-        }
-
-        # Truncate history to avoid token overflow
-        try:
-            state = await self.graph.aget_state(config)
-            existing_messages = state.values.get("messages", [])
-        except Exception:
-            existing_messages = []
-
-        trim_messages = []
-        messages_to_summarize = []
-        if len(existing_messages) > settings.chat_history_limit:
-            keep_idx = len(existing_messages) - settings.chat_history_limit
-            while keep_idx > 0 and existing_messages[keep_idx].type == "tool":
-                keep_idx -= 1
-                
-            # Extract messages that are about to drop out of the context window
-            for m in existing_messages[:keep_idx]:
-                if hasattr(m, "id") and m.id and not str(m.id).startswith("sys_"):
-                    trim_messages.append(RemoveMessage(id=m.id))
-                    # Only summarize Human/Assistant messages to save tokens and noise
-                    if m.type in ["human", "ai"] and m.content:
-                        messages_to_summarize.append(m)
-
-        # Update the rolling summary if there are messages falling out of context
-        if messages_to_summarize:
-            summary_namespace = (user_id, "summary", session_id)
-            current_summary = ""
-            try:
-                summary_item = await self.store.aget(summary_namespace, "current_summary")
-                if summary_item:
-                    current_summary = summary_item.value.get("content", "")
-            except Exception:
-                pass
-                
-            new_summary = await memory_service.summarize_messages(messages_to_summarize, current_summary)
-            if new_summary:
-                await self.store.aput(summary_namespace, "current_summary", {"content": new_summary})
-                # Reload context since we just updated the summary
-                user_context = await self._get_user_context(user_id, session_id)
-                system_prompt = SUPERVISOR_SYSTEM_PROMPT.format(
-                    user_context=user_context, 
-                    user_id=user_id,
-                    current_date=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                )
-
-
-        input_messages = {
-            "messages": trim_messages + [
-                SystemMessage(content=system_prompt, id=f"sys_{user_id}"),
-                HumanMessage(content=message),
-            ]
-        }
-
+        input_messages, config = await self._prepare_turn(message, user_id, session_id)
         async for event in self.graph.astream_events(
             input_messages, config=config, version="v2"
         ):
@@ -594,7 +538,8 @@ class AgentService:
                 elif isinstance(msg, AIMessage) and msg.content:
                     history.append({"role": "assistant", "content": msg.content})
             return history
-        except Exception:
+        except Exception as e:
+            logger.warning("Could not load chat history for session %s: %s", session_id, e)
             return []
 
 

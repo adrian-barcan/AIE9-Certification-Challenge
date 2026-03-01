@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { useUser } from "@/lib/UserContext";
 import { useLanguage } from "@/lib/LanguageContext";
@@ -8,6 +8,34 @@ import { sendMessageStream, getChatSessions, getChatHistory, createChatSession, 
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Image from "next/image";
+
+/**
+ * Find where the "meta" block starts (MiFID disclaimer or Sources section) so we can wrap it in smaller gray text.
+ * Returns index of first line that starts the meta block, or content.length if not found.
+ */
+function findMetaBlockStart(content: string): number {
+    const lines = content.split(/\n/);
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+        if (
+            line.includes("⚠️") ||
+            /^(Surse|Sources)\s*:?\s*$/i.test(trimmed) ||
+            (trimmed.length > 0 && /doar în scop educativ|recomandare de investiții|investment recommendation|consultați un consilier financiar/i.test(line))
+        ) {
+            return i;
+        }
+    }
+    return lines.length;
+}
+
+function splitMessageContent(content: string): { main: string; meta: string } {
+    const lines = content.split(/\n/);
+    const metaStart = findMetaBlockStart(content);
+    const main = lines.slice(0, metaStart).join("\n").trimEnd();
+    const meta = lines.slice(metaStart).join("\n").trim();
+    return { main, meta };
+}
 
 interface Message {
     role: "user" | "assistant";
@@ -337,6 +365,26 @@ export default function ChatPage() {
                                             </div>
                                         ) : msg.role === "assistant" && isStreaming && i === messages.length - 1 && streamingStatus ? (
                                             <span className="text-[var(--text-muted)] italic">{streamingStatus}</span>
+                                        ) : msg.role === "assistant" ? (
+                                            (() => {
+                                                const { main, meta } = splitMessageContent(msg.content);
+                                                return (
+                                                    <div className="prose dark:prose-invert prose-sm max-w-none break-words">
+                                                        {main && (
+                                                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                                                {main}
+                                                            </ReactMarkdown>
+                                                        )}
+                                                        {meta && (
+                                                            <div className="text-xs text-[var(--text-muted)] mt-3 pt-2 border-t border-[var(--border)]">
+                                                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                                                    {meta}
+                                                                </ReactMarkdown>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })()
                                         ) : (
                                             <div className="prose dark:prose-invert prose-sm max-w-none break-words">
                                                 <ReactMarkdown remarkPlugins={[remarkGfm]}>

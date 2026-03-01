@@ -23,8 +23,11 @@ from app.services.transaction_anonymizer import (
     AnonymizedTransaction,
 )
 
-# Use timezone-naive for DB if DB stores UTC; keep consistency with parser (naive)
-def _ensure_tz(dt: datetime) -> datetime:
+from app.config import settings
+
+
+def _to_naive_for_db(dt: datetime) -> datetime:
+    """Return a timezone-naive datetime for DB storage. Keeps consistency with parser (naive)."""
     if dt.tzinfo is None:
         return dt.replace(tzinfo=None)
     return dt
@@ -42,11 +45,11 @@ class TransactionService:
         content: bytes,
         filename: str = "upload.csv",
         bank_label: str = "",
-    ) -> tuple[TransactionSource, int]:
+    ) -> tuple[TransactionSource, int, bool]:
         """Parse CSV, categorize with Mistral, anonymize, and store.
 
         Returns:
-            (created TransactionSource, number of transactions stored).
+            (created TransactionSource, number of transactions stored, used_ollama).
         """
         layout_name, parsed = parse_csv(content, filename)
         if not parsed:
@@ -67,7 +70,7 @@ class TransactionService:
 
         # Description hashes for dedup/recurrence (then discard descriptions)
         desc_hashes = [hash_description(p.description) for p in parsed]
-        dates = [_ensure_tz(p.date) for p in parsed]
+        dates = [_to_naive_for_db(p.date) for p in parsed]
         amounts = [p.amount for p in parsed]
         currencies = [p.currency for p in parsed]
 
@@ -162,8 +165,10 @@ class TransactionService:
         """Build anonymized summary for the agent: spending by category, recurring, fees.
         Used by savings_insights tool; only aggregates, no PII.
         """
-        since = datetime.utcnow() - timedelta(days=365)
-        txs = await self.list_transactions(user_id=user_id, from_date=since, limit=2000)
+        since = datetime.utcnow() - timedelta(days=settings.savings_insights_days)
+        txs = await self.list_transactions(
+            user_id=user_id, from_date=since, limit=settings.savings_insights_limit
+        )
         if not txs:
             return (
                 "The user has no imported transactions yet. "

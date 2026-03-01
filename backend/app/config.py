@@ -70,6 +70,8 @@ class Settings(BaseSettings):
     ollama_base_url: str = Field(default="http://ollama:11434", description="Ollama API base URL for Mistral")
     mistral_model: str = Field(default="mistral", description="Ollama model name for categorization")
     anonymization_salt: str = Field(default="baniwise-transaction-salt", description="Salt for hashing account IDs (set in production)")
+    savings_insights_days: int = Field(default=365, description="Lookback window in days for savings insights summary")
+    savings_insights_limit: int = Field(default=2000, description="Max transactions to consider for savings insights")
 
     model_config = {
         "env_file": ".env",
