@@ -94,7 +94,7 @@ export default function DocumentsPage() {
                 <h3 className="font-bold text-base mb-4 text-[var(--text-primary)]">{t("docs_status_title")}</h3>
                 {loading ? (
                     <p className="text-sm font-medium text-[var(--text-muted)] animate-pulse">
-                        Loading...
+                        {t("loading_generic")}
                     </p>
                 ) : documents.length > 0 ? (
                     <div className="space-y-3">

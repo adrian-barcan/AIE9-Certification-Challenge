@@ -150,7 +150,7 @@ export default function ChatPage() {
 
     const handleDeleteSession = async (sessionId: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        if (!confirm("Are you sure you want to delete this chat history?")) return;
+        if (!confirm(t("chat_delete_confirm"))) return;
 
         try {
             await deleteChatSession(sessionId);
@@ -262,15 +262,15 @@ export default function ChatPage() {
             {/* Sessions Sidebar */}
             <div className="w-64 border-r border-[var(--border)] bg-[var(--bg-card)] hidden lg:flex flex-col shrink-0 shadow-sm z-10">
                 <div className="p-5 border-b border-[var(--border)] flex justify-between items-center bg-[var(--bg-card)]">
-                    <h3 className="font-bold text-sm text-[var(--text-primary)] uppercase tracking-wider">Chat History</h3>
-                    <button onClick={createNewSession} className="text-[var(--accent)] hover:bg-[var(--accent)]/10 p-2 rounded-xl transition-all border border-[var(--border)] shadow-sm bg-[var(--bg-card)] hover:scale-105" title="New Chat">
+                    <h3 className="font-bold text-sm text-[var(--text-primary)] uppercase tracking-wider">{t("chat_history_title")}</h3>
+                    <button type="button" onClick={createNewSession} className="text-[var(--accent)] hover:bg-[var(--accent)]/10 p-2 rounded-xl transition-all border border-[var(--border)] shadow-sm bg-[var(--bg-card)] hover:scale-105" title={t("nav_chat")} aria-label={t("chat_history_title")}>
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                         </svg>
                     </button>
                 </div>
                 <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                    {sessions.length === 0 && <div className="text-xs text-center p-4 text-[var(--text-muted)] font-medium">No previous sessions</div>}
+                    {sessions.length === 0 && <div className="text-xs text-center p-4 text-[var(--text-muted)] font-medium">{t("chat_no_sessions")}</div>}
                     {sessions.map(s => (
                         <div key={s.id} className={`w-full text-left rounded-2xl text-sm transition-all flex items-center group mb-1 ${currentSessionId === s.id ? "bg-[var(--accent)]/10 text-[var(--text-primary)] font-bold border border-[var(--accent)]/20 shadow-sm" : "text-[var(--text-secondary)] hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)] border border-transparent font-medium"}`}>
                             <button
@@ -282,11 +282,13 @@ export default function ChatPage() {
                                 </svg>
                                 <span className="truncate flex-1 text-left">{s.title || "Conversation"}</span>
                             </button>
-                            <button
-                                onClick={(e) => handleDeleteSession(s.id, e)}
-                                className="opacity-0 group-hover:opacity-100 p-2.5 mr-1 text-[var(--text-muted)] hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all shrink-0"
-                                title="Delete Chat"
-                            >
+                                <button
+                                    type="button"
+                                    onClick={(e) => handleDeleteSession(s.id, e)}
+                                    className="opacity-0 group-hover:opacity-100 p-2.5 mr-1 text-[var(--text-muted)] hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all shrink-0"
+                                    title={t("goals_delete")}
+                                    aria-label={t("goals_delete")}
+                                >
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
                                 </svg>
@@ -419,6 +421,7 @@ export default function ChatPage() {
                                     placeholder={t("chat_input_placeholder")}
                                     disabled={isStreaming}
                                     rows={1}
+                                    aria-label={t("chat_input_placeholder")}
                                     className="w-full resize-none bg-transparent text-sm outline-none placeholder:text-[var(--text-muted)] min-h-[24px] leading-6 text-[var(--text-primary)]"
                                     onKeyDown={(e) => {
                                         if (e.key === "Enter" && !e.shiftKey) {
@@ -432,8 +435,10 @@ export default function ChatPage() {
                             {/* Bottom toolbar */}
                             <div className="flex items-center justify-end px-3 pb-3">
                                 <button
+                                    type="button"
                                     onClick={() => sendMessage(input)}
                                     disabled={!hasContent || isStreaming}
+                                    aria-label={t("chat_send")}
                                     className={`inline-flex shrink-0 items-center justify-center rounded-full p-2.5 transition-colors ${hasContent
                                         ? "bg-[var(--accent)] text-[var(--accent-fg)] hover:opacity-90"
                                         : "bg-[var(--bg-input)] text-[var(--text-muted)] cursor-not-allowed"

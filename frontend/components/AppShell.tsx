@@ -3,12 +3,14 @@
 import { ReactNode, useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { UserProvider, useUser } from "@/lib/UserContext";
+import { useLanguage } from "@/lib/LanguageContext";
 import Sidebar from "@/components/Sidebar";
 import UserSetup from "@/components/UserSetup";
 import Image from "next/image";
 
 function AppContent({ children }: { children: ReactNode }) {
     const { user, loading } = useUser();
+    const { t } = useLanguage();
     const pathname = usePathname();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -18,9 +20,9 @@ function AppContent({ children }: { children: ReactNode }) {
 
     if (loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)]">
+            <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)]" role="status" aria-live="polite">
                 <div className="text-[var(--text-muted)] animate-pulse text-lg">
-                    Se încarcă...
+                    {t("app_loading")}
                 </div>
             </div>
         );
@@ -39,7 +41,11 @@ function AppContent({ children }: { children: ReactNode }) {
                     <span className="tracking-tight text-[var(--text-primary)]">BaniWise</span>
                 </div>
                 <button
+                    type="button"
                     onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                    aria-expanded={isMobileMenuOpen}
+                    aria-controls="mobile-sidebar"
+                    aria-label={isMobileMenuOpen ? t("menu_close") : t("menu_open")}
                     className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border)] rounded-lg bg-[var(--bg-input)] transition-colors"
                 >
                     {isMobileMenuOpen ? (
@@ -59,7 +65,7 @@ function AppContent({ children }: { children: ReactNode }) {
             )}
 
             {/* Sidebar Container */}
-            <div className={`fixed inset-y-0 left-0 z-50 transform md:relative md:translate-x-0 transition-transform duration-300 ease-in-out ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}>
+            <div id="mobile-sidebar" className={`fixed inset-y-0 left-0 z-50 transform md:relative md:translate-x-0 transition-transform duration-300 ease-in-out ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}>
                 <Sidebar />
             </div>
 

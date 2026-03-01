@@ -66,11 +66,15 @@ export default function GoalsPage() {
                 currency: "RON",
             });
         },
+        onError: () => {
+            // Error shown via createMutation.isError / createMutation.error below
+        },
     });
 
     const deleteMutation = useMutation({
         mutationFn: deleteGoal,
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ["goals", user?.id] }),
+        onError: () => {},
     });
 
     const contributeMutation = useMutation({
@@ -177,6 +181,11 @@ export default function GoalsPage() {
             {showForm && (
                 <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-6 mb-6 animate-fade-in shadow-sm">
                     <h3 className="font-semibold mb-4 text-[var(--text-primary)]">{t("modal_title")}</h3>
+                    {createMutation.isError && (
+                        <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-sm text-red-600 dark:text-red-400">
+                            {t("goals_create_error")}
+                        </div>
+                    )}
                     <form onSubmit={handleCreate} className="space-y-4">
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                             <div className="lg:col-span-2">
@@ -306,12 +315,13 @@ export default function GoalsPage() {
                         </div>
 
                         <div className="pt-4 flex justify-end">
-                            <button
-                                type="submit"
-                                className="px-6 py-2.5 rounded-full bg-[var(--accent)] text-[var(--accent-fg)] text-sm font-semibold transition-transform hover:scale-105 shadow-md hover:shadow-lg"
-                            >
-                                {t("modal_create")}
-                            </button>
+                                <button
+                                    type="submit"
+                                    disabled={createMutation.isPending}
+                                    className="px-6 py-2.5 rounded-full bg-[var(--accent)] text-[var(--accent-fg)] text-sm font-semibold transition-transform hover:scale-105 shadow-md hover:shadow-lg disabled:opacity-60 disabled:pointer-events-none"
+                                >
+                                    {createMutation.isPending ? t("modal_saving") : t("modal_create")}
+                                </button>
                         </div>
                     </form>
                 </div>

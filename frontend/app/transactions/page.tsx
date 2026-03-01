@@ -167,7 +167,7 @@ export default function TransactionsPage() {
                     {t("tx_sources")}
                 </h3>
                 {loadingSources ? (
-                    <p className="text-sm text-[var(--text-muted)] animate-pulse">Loading...</p>
+                    <p className="text-sm text-[var(--text-muted)] animate-pulse">{t("tx_loading")}</p>
                 ) : sources.length === 0 ? (
                     <p className="text-sm text-[var(--text-muted)]">{t("tx_no_sources")}</p>
                 ) : (
@@ -218,15 +218,13 @@ export default function TransactionsPage() {
             <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-6 shadow-sm">
                 <h3 className="font-bold text-base mb-4 text-[var(--text-primary)]">
                     {t("tx_transactions")}
-                    {selectedSourceId ? " (filtered)" : ""}
+                    {selectedSourceId ? ` (${t("tx_filtered")})` : ""}
                 </h3>
                 {loadingTx ? (
-                    <p className="text-sm text-[var(--text-muted)] animate-pulse">Loading...</p>
+                    <p className="text-sm text-[var(--text-muted)] animate-pulse">{t("tx_loading")}</p>
                 ) : transactions.length === 0 ? (
                     <p className="text-sm text-[var(--text-muted)]">
-                        {selectedSourceId
-                            ? "No transactions in this source."
-                            : "Upload a CSV to see anonymized transactions here."}
+                        {selectedSourceId ? t("tx_empty_filtered") : t("tx_empty_upload")}
                     </p>
                 ) : (
                     <div className="overflow-x-auto">
