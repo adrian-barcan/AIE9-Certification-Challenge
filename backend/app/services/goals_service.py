@@ -67,6 +67,7 @@ class GoalsService:
         monthly_contribution: float = 0,
         deadline: Optional[datetime] = None,
         priority: str = "medium",
+        currency: str = "RON",
         notes: Optional[str] = None,
     ) -> Goal:
         """Create a new financial goal.
@@ -92,6 +93,7 @@ class GoalsService:
             monthly_contribution=monthly_contribution,
             deadline=deadline,
             priority=priority,
+            currency=currency,
             notes=notes,
         )
         self.db.add(goal)
@@ -222,11 +224,11 @@ class GoalsService:
             status_icon = "✅" if g.status == GoalStatus.COMPLETED.value else "🔄"
             lines.append(
                 f"{status_icon} {g.icon} {g.name}: "
-                f"{g.saved_amount:,.0f} / {g.target_amount:,.0f} RON "
+                f"{g.saved_amount:,.0f} / {g.target_amount:,.0f} {g.currency} "
                 f"({g.progress_percent:.0f}%)"
             )
             if feasibility.get("months_needed"):
-                lines.append(f"   → {feasibility['months_needed']} luni rămase la {g.monthly_contribution:,.0f} RON/lună")
+                lines.append(f"   → {feasibility['months_needed']} luni rămase la {g.monthly_contribution:,.0f} {g.currency}/lună")
             if feasibility.get("on_track") is not None:
                 track = "pe drumul cel bun" if feasibility["on_track"] else "în urmă"
                 lines.append(f"   → Status: {track}")

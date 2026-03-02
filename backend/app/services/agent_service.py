@@ -223,6 +223,7 @@ async def create_goal(
     target_amount: float,
     icon: str = "🎯",
     monthly_contribution: float = 0,
+    currency: str = "RON",
 ) -> str:
     """Create a new financial savings goal for the user.
 
@@ -231,9 +232,10 @@ async def create_goal(
     Args:
         user_id: The user's UUID as a string.
         name: Goal name (e.g., "Mașină", "Vacanță").
-        target_amount: Target amount in RON.
+        target_amount: Target amount to save.
         icon: Emoji icon for the goal.
-        monthly_contribution: Planned monthly savings in RON.
+        monthly_contribution: Planned monthly savings amount.
+        currency: Currency code (e.g., "RON", "EUR"). Default is "RON".
 
     Returns:
         Confirmation message with goal details.
@@ -250,6 +252,7 @@ async def create_goal(
                 target_amount=target_amount,
                 icon=icon,
                 monthly_contribution=monthly_contribution,
+                currency=currency,
             )
             await db.commit()
             months = GoalsService.calculate_months_to_goal(
@@ -258,8 +261,8 @@ async def create_goal(
             months_text = f" (~{months} luni)" if months else ""
             return (
                 f"✅ Obiectiv creat: {icon} {name}\n"
-                f"Țintă: {target_amount:,.0f} RON{months_text}\n"
-                f"Contribuție lunară: {monthly_contribution:,.0f} RON"
+                f"Țintă: {target_amount:,.0f} {currency}{months_text}\n"
+                f"Contribuție lunară: {monthly_contribution:,.0f} {currency}"
             )
     except Exception as e:
         logger.error(f"Create goal failed: {e}")

@@ -138,7 +138,7 @@ flowchart TB
         EmbQ[Embed Question]
         VecRet[Vector Retriever<br/>ParentDocumentRetriever]
         BM25[BM25 Retriever]
-        Ensemble[Ensemble Retriever<br/>0.3 BM25 + 0.7 Vector]
+        Ensemble[Ensemble Retriever<br/>0.2 BM25 + 0.8 Vector]
         Rerank[Cohere Rerank<br/>rerank-multilingual-v3.0]
         TopN[Top-N Chunks]
         Format[Formatted Context]
