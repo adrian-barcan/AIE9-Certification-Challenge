@@ -289,7 +289,7 @@ The evaluation notebook runs all three pipelines on the same 17-question dataset
 
 ### Decision: **Keep the Tier 3 Cohere-Reranked Hybrid Ensemble** ✅
 
-We will use the Tier 3 pipeline (ParentDocumentRetriever + BM25 + EnsembleRetriever + CohereRerank) for Demo Day.
+I will use the Tier 3 pipeline (ParentDocumentRetriever + BM25 + EnsembleRetriever + CohereRerank) for Demo Day.
 
 **Rationale:**
 1. The three-tier RAGAS evaluation on 17 questions (12 SDG + 5 manual) shows that **Tier 3 improves 3 of 4 metrics over the baseline**: faithfulness (+0.008), context precision (+0.05), and context recall (+0.03). The reranker effectively filters noise from the ensemble's candidates while the wider retrieval window (top_k=20 → top_n=12) preserves enough context for faithful, grounded answers.
