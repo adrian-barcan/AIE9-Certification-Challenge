@@ -92,7 +92,7 @@ class RAGService:
 
     @staticmethod
     def _deduplicate_docs(
-        docs: list[Document], threshold: float = 0.85
+        docs: list[Document], threshold: float = 0.75
     ) -> list[Document]:
         """Remove near-duplicate documents based on text overlap ratio.
 
@@ -286,7 +286,7 @@ class RAGService:
             self.bm25_retriever.k = top_k
             retriever = EnsembleRetriever(
                 retrievers=[self.bm25_retriever, parent_retriever],
-                weights=[0.3, 0.7]
+                weights=[0.2, 0.8]
             )
         else:
             if use_ensemble and not self.bm25_retriever:
