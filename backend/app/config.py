@@ -51,8 +51,8 @@ class Settings(BaseSettings):
     rag_parent_chunk_overlap: int = Field(default=200)
     rag_child_chunk_size: int = Field(default=400)
     rag_child_chunk_overlap: int = Field(default=50)
-    rag_top_k: int = Field(default=15, description="Initial retrieval count before reranking")
-    rag_rerank_top_n: int = Field(default=7, description="Final count after Cohere reranking")
+    rag_top_k: int = Field(default=20, description="Initial retrieval count before reranking")
+    rag_rerank_top_n: int = Field(default=12, description="Final count after Cohere reranking")
     embedding_model: str = Field(default="text-embedding-3-small")
 
     # === LLM Models ===

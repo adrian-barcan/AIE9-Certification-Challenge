@@ -233,8 +233,9 @@ class RAGService:
         # 1. Add to Parent Retriever (Vector Store + DocStore)
         parent_retriever.add_documents(all_docs)
         
-        # 2. Add to BM25
-        self.bm25_retriever = BM25Retriever.from_documents(all_docs)
+        # 2. Build BM25 from parent-split chunks so it matches vector retriever granularity
+        parent_chunks = self.parent_splitter.split_documents(all_docs)
+        self.bm25_retriever = BM25Retriever.from_documents(parent_chunks)
         
         # Persist states
         self._save_bm25(folder_path)
