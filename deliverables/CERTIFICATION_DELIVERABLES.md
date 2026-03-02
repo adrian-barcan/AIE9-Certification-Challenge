@@ -125,18 +125,17 @@ See [README.md](README.md#-architecture) for detailed technical diagrams of the 
 
 ### Data Sources
 
-**Local document knowledge base** — 14 Romanian financial PDFs in `backend/documents/` (mounted at `/app/documents` in Docker). The RAG pipeline ingests these via the `/api/documents/ingest` endpoint (PyMuPDF loader, then ParentDocumentRetriever into Qdrant and an in-memory docstore persisted to `docstore.pkl` in the documents folder):
+**Local document knowledge base** — 13 Romanian financial PDFs in `backend/documents/` (mounted at `/app/documents` in Docker). The RAG pipeline ingests these via the `/api/documents/ingest` endpoint (PyMuPDF loader, then ParentDocumentRetriever into Qdrant and an in-memory docstore persisted to `docstore.pkl` in the documents folder):
 
 | Document | Content |
 |---|---|
-| `brosura_fidelis.pdf` | FIDELIS government bonds brochure |
-| `tezaur_ghid_2023.pdf` | TEZAUR guide (2023) |
+| `Ghid_TEZAUR_si_FIDELIS.pdf` | TEZAUR and FIDELIS combined guide |
+| `ghidul_investitorului.pdf` | Investor guide |
 | `ghid_investitor_asf.pdf` | ASF investor guide |
 | `ghid_piata_capital_asf.pdf` | ASF capital market guide |
 | `ghid_investitor_titluri_stat_ue_2019.pdf` | EU state securities investor guide (2019) |
 | `legea_126_2018_piata_capital.pdf` | Law 126/2018 (capital market / MiFID II) |
 | `legea_24_2017_emitenti.pdf` | Law 24/2017 (issuers) |
-| `ordin_mf_330_tezaur.pdf` | Ministry of Finance order 330 (TEZAUR) |
 | `cod_bvb_operator_2022.pdf` | BVB operator code (2022) |
 | `cod_can_ats_2010.pdf` | CAN/ATS code (2010) |
 | `codul_fiscal_2026.pdf` | Fiscal code (2026) |
@@ -218,7 +217,7 @@ Additionally, the SDG notebook (`backend/notebooks/sdg_and_evaluation.ipynb`) us
 ### Evaluation Implementation
 
 The evaluation runs via the Jupyter notebook `backend/notebooks/sdg_and_evaluation.ipynb`, which:
-1. Loads two target PDFs (`brosura_fidelis.pdf`, `tezaur_ghid_2023.pdf`)
+1. Loads two target PDFs (`Ghid_TEZAUR_si_FIDELIS.pdf`, `ghidul_investitorului.pdf`)
 2. Uses RAGAS `TestsetGenerator` (GPT-4o-mini) to generate 10 synthetic evaluation questions
 3. Falls back to 5 manually curated questions if SDG fails
 4. Runs the RAG pipeline on all questions and evaluates with RAGAS metrics

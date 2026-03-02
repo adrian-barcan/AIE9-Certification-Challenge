@@ -26,7 +26,7 @@ A highly optimized document retrieval system designed to ingest and query Romani
 - **Contextual Compression**: Two-stage retrieval using **Cohere Rerank** (`rerank-multilingual-v3.0`). Searches pull the top-K documents from Qdrant, which Cohere then reranks to provide the precise top-N most contextually relevant chunks to the LLM.
 
 ### 4. Synthetic Data Generation (SDG) & Evaluation (RAGAS)
-The `backend/evals/` directory contains a robust, programmatic evaluation suite:
+The `backend/notebooks/sdg_and_evaluation.ipynb` notebook contains a robust, programmatic evaluation suite. It uses the key document pair **`Ghid_TEZAUR_si_FIDELIS.pdf`** and **`ghidul_investitorului.pdf`** for SDG and RAG evaluation:
 - **Synthetic Data Generation**: Automates the creation of test sets from the raw PDFs using RAGAS `TestsetGenerator`. Produces Simple, Multi-Context, and Reasoning questions.
 - **RAG Evaluation**: Uses **RAGAS** metrics (*Faithfulness, Answer Relevancy, Context Precision/Recall*) to mathematically prove the performance delta between a baseline top-K pipeline vs. the Cohere-reranked pipeline.
 - **Agent Evaluation**: Custom programmatic evaluation testing the Supervisor model on Tool Routing accuracy, Topic Adherence, and **MiFID II Regulatory Compliance**.
@@ -351,7 +351,7 @@ docker compose up --build
 docker compose exec backend jupyter notebook \
   --ip=0.0.0.0 --port=8888 --no-browser --allow-root \
   --NotebookApp.token='' --notebook-dir=/app
-# Then open http://localhost:8888 and navigate to evals/sdg_and_evaluation.ipynb → Kernel → Restart & Run All
+# Then open http://localhost:8888 and navigate to notebooks/sdg_and_evaluation.ipynb → Kernel → Restart & Run All
 
 # 4. Verify services are running (open in your browser)
 #    http://localhost:8000/docs   — FastAPI Swagger UI
@@ -404,7 +404,7 @@ If Ollama is not available, the backend uses rule-based categorization; import s
 │   │       ├── mistral_categorizer.py   # Mistral/Ollama + rule-based categories
 │   │       └── transaction_anonymizer.py # Anonymize before storage
 │   ├── documents/           # Romanian financial PDFs (Knowledge Base)
-│   └── evals/
+│   └── notebooks/
 │       └── sdg_and_evaluation.ipynb # SDG, RAGAS (baseline vs reranked), Agent evals
 ├── frontend/                # Next.js 14 Chat & Goals UI
 ├── docker-compose.yml       # Production-ready container orchestration

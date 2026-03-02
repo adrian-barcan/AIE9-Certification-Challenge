@@ -13,6 +13,7 @@ Usage:
 import logging
 import os
 import pickle
+from difflib import SequenceMatcher
 from typing import Optional
 
 from langchain_community.document_loaders import PyMuPDFLoader
@@ -21,7 +22,7 @@ from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_cohere import CohereRerank
-from langchain.retrievers import ContextualCompressionRetriever, ParentDocumentRetriever, EnsembleRetriever
+from langchain.retrievers import ParentDocumentRetriever, EnsembleRetriever
 from langchain.storage import InMemoryStore
 from qdrant_client import QdrantClient, models
 from langchain_qdrant import QdrantVectorStore
@@ -81,6 +82,34 @@ class RAGService:
             cohere_api_key=settings.cohere_api_key,
             top_n=settings.rag_rerank_top_n,
         )
+
+    @staticmethod
+    def _text_overlap_ratio(text_a: str, text_b: str) -> float:
+        """Similarity ratio between two texts using SequenceMatcher."""
+        if not text_a or not text_b:
+            return 0.0
+        return SequenceMatcher(None, text_a, text_b).ratio()
+
+    @staticmethod
+    def _deduplicate_docs(
+        docs: list[Document], threshold: float = 0.85
+    ) -> list[Document]:
+        """Remove near-duplicate documents based on text overlap ratio.
+
+        Keeps the first occurrence (highest-ranked by the ensemble) and drops
+        later documents whose content overlaps above the threshold with any
+        already-kept document.
+        """
+        unique: list[Document] = []
+        for doc in docs:
+            if any(
+                RAGService._text_overlap_ratio(doc.page_content, kept.page_content)
+                > threshold
+                for kept in unique
+            ):
+                continue
+            unique.append(doc)
+        return unique
 
     def _ensure_vector_store(self) -> QdrantVectorStore:
         """Get or create the Qdrant vector store."""
@@ -224,13 +253,16 @@ class RAGService:
         question: str,
         top_k: Optional[int] = None,
         use_reranking: bool = True,
+        use_ensemble: bool = True,
     ) -> list[Document]:
-        """Retrieve relevant parent document chunks using Ensemble Retriever.
+        """Retrieve relevant parent document chunks.
 
         Args:
             question: The user's question.
             top_k: Number of initial results to retrieve.
             use_reranking: Whether to apply Cohere reranking.
+            use_ensemble: Whether to use BM25+Vector ensemble (True) or
+                dense vector only via ParentDocumentRetriever (False).
 
         Returns:
             List of relevant Document chunks, ordered by relevance.
@@ -250,29 +282,28 @@ class RAGService:
             search_kwargs={"k": top_k}
         )
 
-        # Ensemble
-        if self.bm25_retriever:
+        if use_ensemble and self.bm25_retriever:
             self.bm25_retriever.k = top_k
-            ensemble_retriever = EnsembleRetriever(
+            retriever = EnsembleRetriever(
                 retrievers=[self.bm25_retriever, parent_retriever],
-                weights=[0.3, 0.7] # Emphasize dense but keep sparse for exact hits
+                weights=[0.3, 0.7]
             )
         else:
-            logger.warning("BM25 not loaded, falling back to pure Vector search.")
-            ensemble_retriever = parent_retriever
+            if use_ensemble and not self.bm25_retriever:
+                logger.warning("BM25 not loaded, falling back to pure Vector search.")
+            retriever = parent_retriever
+
+        raw_results = await retriever.ainvoke(question)
+        deduped = self._deduplicate_docs(raw_results)
+        logger.info(
+            f"Query: '{question[:50]}...' → {len(raw_results)} raw, "
+            f"{len(deduped)} after dedup"
+        )
 
         if use_reranking:
-            retriever = ContextualCompressionRetriever(
-                base_compressor=self.reranker,
-                base_retriever=ensemble_retriever,
-            )
-            results = await retriever.ainvoke(question)
+            results = await self.reranker.acompress_documents(deduped, question)
         else:
-            results = await ensemble_retriever.ainvoke(question)
-
-        logger.info(
-            f"Query: '{question[:50]}...' → {len(results)} results "
-        )
+            results = deduped
         return results
 
     async def get_context_for_prompt(

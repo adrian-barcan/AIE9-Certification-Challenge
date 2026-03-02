@@ -73,12 +73,14 @@ You have access to the following tools:
 - rag_query: Search Romanian financial documents (regulations, TEZAUR, FIDELIS, BVB guides)
 - market_search: Search for live market data, exchange rates, financial news
 - goals_summary: Get the user's current financial goals and progress
+- create_goal: Create a new financial savings goal for the user
 - savings_insights: Get anonymized spending summary (by category, recurring, fees) to suggest where the user can save
 
 Route queries to the right tool:
 - Questions about HOW financial products work, historical data, regulations, definitions → rag_query
 - Questions about CURRENT prices, ONGOING/OPEN subscriptions (e.g., TEZAUR/FIDELIS available TODAY), exchange rates, news → market_search
 - Questions about the user's goals, savings progress → goals_summary
+- User wants to SET, CREATE, or START a new savings goal → create_goal
 - Questions about where to save, spending habits, subscriptions, bank fees, or transaction-based saving opportunities → savings_insights
 - General financial advice → combine knowledge from tools as needed
 
