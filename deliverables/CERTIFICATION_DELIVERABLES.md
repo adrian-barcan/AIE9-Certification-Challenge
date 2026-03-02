@@ -340,4 +340,4 @@ The evaluation validates:
 | Written Deliverables | This file (`CERTIFICATION_DELIVERABLES.md`) |
 | Architecture Diagrams | [README.md](../README.md#-architecture) (Mermaid) |
 | SDG + RAG + Agent Evaluation | [sdg_and_evaluation.ipynb](../backend/notebooks/sdg_and_evaluation.ipynb) |
-| Loom Video | *(link to be added)* |
+| Loom Video | [BaniWise - Certification Challenge](https://www.loom.com/share/7e667621bc444fcba5ea34368fc63a25) |
