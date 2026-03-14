@@ -10,8 +10,10 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
+from app.api.deps import get_current_user
 from app.database import get_db
 from app.models.transaction import Transaction, TransactionSource
+from app.models.user import User
 from app.schemas import (
     TransactionSourceResponse,
     TransactionResponse,
@@ -37,10 +39,10 @@ def _source_to_response(source: TransactionSource, count: Optional[int] = None) 
 
 @router.post("/ingest", response_model=TransactionIngestResponse, status_code=status.HTTP_201_CREATED)
 async def ingest_transactions(
-    user_id: uuid.UUID,
     file: UploadFile = File(...),
     bank_label: str = Form(default=""),
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> TransactionIngestResponse:
     """Upload a CSV bank statement. We auto-detect format (BRD, BCR, Raiffeisen). Parse, categorize (Mistral), anonymize, and store."""
     if not file.filename or not file.filename.lower().endswith(".csv"):
@@ -52,7 +54,7 @@ async def ingest_transactions(
     try:
         service = TransactionService(db)
         source, count, used_ollama = await service.ingest_csv(
-            user_id=user_id,
+            user_id=user.id,
             content=content,
             filename=file.filename or "upload.csv",
             bank_label=bank_label,
@@ -73,7 +75,7 @@ async def ingest_transactions(
         if "users" in err_msg or "user_id" in err_msg:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User not found. Create a user (e.g. from the app welcome screen) and try again.",
+                detail="User not found. Please authenticate and try again.",
             )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -88,12 +90,12 @@ async def ingest_transactions(
 
 @router.get("/sources", response_model=List[TransactionSourceResponse])
 async def list_sources(
-    user_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> List[TransactionSourceResponse]:
     """List transaction sources (imports) for the user. No sensitive data."""
     service = TransactionService(db)
-    sources = await service.list_sources(user_id)
+    sources = await service.list_sources(user.id)
     out = []
     for s in sources:
         result = await db.execute(
@@ -106,17 +108,17 @@ async def list_sources(
 
 @router.get("/", response_model=List[TransactionResponse])
 async def list_transactions(
-    user_id: uuid.UUID,
     source_id: Optional[uuid.UUID] = None,
     from_date: Optional[datetime] = None,
     to_date: Optional[datetime] = None,
     limit: int = 500,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> List[TransactionResponse]:
     """List anonymized transactions (category, date, amount). Optional filters by source and date range."""
     service = TransactionService(db)
     transactions = await service.list_transactions(
-        user_id=user_id,
+        user_id=user.id,
         source_id=source_id,
         from_date=from_date,
         to_date=to_date,
@@ -128,12 +130,12 @@ async def list_transactions(
 @router.delete("/sources/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_source(
     source_id: uuid.UUID,
-    user_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> None:
     """Delete a transaction source and all its transactions."""
     service = TransactionService(db)
-    deleted = await service.delete_source(source_id, user_id)
+    deleted = await service.delete_source(source_id, user.id)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

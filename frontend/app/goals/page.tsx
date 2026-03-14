@@ -48,12 +48,12 @@ export default function GoalsPage() {
 
     const { data: goals = [], isLoading: loading } = useQuery({
         queryKey: ["goals", user?.id],
-        queryFn: () => listGoals(user!.id),
+        queryFn: () => listGoals(),
         enabled: !!user?.id,
     });
 
     const createMutation = useMutation({
-        mutationFn: (data: GoalCreate) => createGoal(user!.id, data),
+        mutationFn: (data: GoalCreate) => createGoal(data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["goals", user?.id] });
             setShowForm(false);

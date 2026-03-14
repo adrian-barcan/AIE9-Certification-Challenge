@@ -4,6 +4,7 @@ from app.models.user import User
 from app.models.goal import Goal, GoalStatus, GoalPriority
 from app.models.chat import ChatSession
 from app.models.transaction import TransactionSource, Transaction
+from app.models.session import Session
 
 __all__ = [
     "User",
@@ -13,4 +14,5 @@ __all__ = [
     "ChatSession",
     "TransactionSource",
     "Transaction",
+    "Session",
 ]

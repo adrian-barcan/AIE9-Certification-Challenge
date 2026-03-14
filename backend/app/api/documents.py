@@ -5,8 +5,10 @@ Handles document ingestion into the RAG pipeline and listing indexed documents.
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.api.deps import get_current_user
+from app.models.user import User
 from app.schemas import IngestResponse, DocumentInfo
 from app.services.rag_service import rag_service
 
@@ -16,7 +18,7 @@ router = APIRouter(prefix="/api/documents", tags=["documents"])
 
 
 @router.post("/ingest", response_model=IngestResponse)
-async def ingest_documents() -> IngestResponse:
+async def ingest_documents(_: User = Depends(get_current_user)) -> IngestResponse:
     """Trigger RAG pipeline to ingest documents from the /documents folder.
 
     Loads PDFs, chunks them, generates embeddings, and stores in Qdrant.

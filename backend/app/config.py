@@ -4,6 +4,7 @@ Loads all settings from environment variables / .env file using Pydantic Setting
 Covers API keys, database connections, RAG parameters, and LLM model choices.
 """
 
+import json
 import os
 
 from pydantic_settings import BaseSettings
@@ -72,6 +73,28 @@ class Settings(BaseSettings):
     anonymization_salt: str = Field(default="baniwise-transaction-salt", description="Salt for hashing account IDs (set in production)")
     savings_insights_days: int = Field(default=365, description="Lookback window in days for savings insights summary")
     savings_insights_limit: int = Field(default=2000, description="Max transactions to consider for savings insights")
+
+    # === Auth / Session / CORS ===
+    auth_cookie_secure: bool = Field(default=False, description="Use Secure flag for session cookie (enable in production HTTPS)")
+    auth_max_sessions_per_user: int = Field(default=5, description="Maximum number of active sessions per user")
+    auth_session_cleanup_interval_seconds: int = Field(default=900, description="How often to cleanup expired sessions")
+    cors_origins: str = Field(
+        default="http://localhost:3000,http://127.0.0.1:3000",
+        description="Allowed CORS origins as CSV or JSON array string",
+    )
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """Parse CORS origins from CSV or JSON env format."""
+        raw = self.cors_origins.strip()
+        if raw.startswith("["):
+            try:
+                parsed = json.loads(raw)
+                if isinstance(parsed, list):
+                    return [str(origin).strip() for origin in parsed if str(origin).strip()]
+            except json.JSONDecodeError:
+                pass
+        return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
     model_config = {
         "env_file": ".env",

@@ -27,14 +27,14 @@ export default function TransactionsPage() {
 
     const { data: sources = [], isLoading: loadingSources } = useQuery({
         queryKey: ["transaction-sources", user?.id],
-        queryFn: () => listTransactionSources(user!.id),
+        queryFn: () => listTransactionSources(),
         enabled: !!user?.id,
     });
 
     const { data: transactions = [], isLoading: loadingTx } = useQuery({
         queryKey: ["transactions", user?.id, selectedSourceId],
         queryFn: () =>
-            listTransactions(user!.id, {
+            listTransactions({
                 source_id: selectedSourceId || undefined,
                 limit: 200,
             }),
@@ -43,7 +43,7 @@ export default function TransactionsPage() {
 
     const ingestMutation = useMutation({
         mutationFn: ({ file, label }: { file: File; label: string }) =>
-            ingestTransactions(user!.id, file, label || undefined),
+            ingestTransactions(file, label || undefined),
         onSuccess: (data) => {
             const by = data.categorization_source === "ollama"
                 ? " (Mistral/Ollama)"
@@ -66,7 +66,7 @@ export default function TransactionsPage() {
 
     const deleteMutation = useMutation({
         mutationFn: (sourceId: string) =>
-            deleteTransactionSource(sourceId, user!.id),
+            deleteTransactionSource(sourceId),
         onSuccess: () => {
             if (selectedSourceId) setSelectedSourceId(null);
             queryClient.invalidateQueries({ queryKey: ["transaction-sources", user?.id] });

@@ -10,50 +10,61 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_user
 from app.database import get_db
 from app.models.goal import Goal
+from app.models.user import User
 from app.schemas import GoalCreate, GoalUpdate, GoalContribute, GoalResponse
 
 router = APIRouter(prefix="/api/goals", tags=["goals"])
 
 
+async def _get_goal_for_user(goal_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSession) -> Goal:
+    result = await db.execute(select(Goal).where(Goal.id == goal_id, Goal.user_id == user_id))
+    goal = result.scalar_one_or_none()
+    if not goal:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Goal not found",
+        )
+    return goal
+
+
 @router.get("/", response_model=List[GoalResponse])
 async def list_goals(
-    user_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> list[Goal]:
     """List all goals for a user.
 
     Args:
-        user_id: The user's UUID (query param).
         db: Database session.
 
     Returns:
         List of goals belonging to the user.
     """
     result = await db.execute(
-        select(Goal).where(Goal.user_id == user_id).order_by(Goal.created_at.desc())
+        select(Goal).where(Goal.user_id == user.id).order_by(Goal.created_at.desc())
     )
     return list(result.scalars().all())
 
 
 @router.post("/", response_model=GoalResponse, status_code=status.HTTP_201_CREATED)
 async def create_goal(
-    user_id: uuid.UUID,
     data: GoalCreate,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> Goal:
     """Create a new financial goal.
 
     Args:
-        user_id: The user's UUID (query param).
         data: Goal creation data.
         db: Database session.
 
     Returns:
         The created goal.
     """
-    goal = Goal(user_id=user_id, **data.model_dump())
+    goal = Goal(user_id=user.id, **data.model_dump())
     db.add(goal)
     await db.flush()
     await db.commit()
@@ -65,6 +76,7 @@ async def create_goal(
 async def get_goal(
     goal_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> Goal:
     """Get a goal by ID.
 
@@ -78,14 +90,7 @@ async def get_goal(
     Raises:
         HTTPException: If goal not found.
     """
-    result = await db.execute(select(Goal).where(Goal.id == goal_id))
-    goal = result.scalar_one_or_none()
-    if not goal:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Goal not found",
-        )
-    return goal
+    return await _get_goal_for_user(goal_id, user.id, db)
 
 
 @router.put("/{goal_id}", response_model=GoalResponse)
@@ -93,6 +98,7 @@ async def update_goal(
     goal_id: uuid.UUID,
     data: GoalUpdate,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> Goal:
     """Update a goal (partial update).
 
@@ -107,13 +113,7 @@ async def update_goal(
     Raises:
         HTTPException: If goal not found.
     """
-    result = await db.execute(select(Goal).where(Goal.id == goal_id))
-    goal = result.scalar_one_or_none()
-    if not goal:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Goal not found",
-        )
+    goal = await _get_goal_for_user(goal_id, user.id, db)
 
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -129,6 +129,7 @@ async def update_goal(
 async def delete_goal(
     goal_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> None:
     """Delete a goal.
 
@@ -139,13 +140,7 @@ async def delete_goal(
     Raises:
         HTTPException: If goal not found.
     """
-    result = await db.execute(select(Goal).where(Goal.id == goal_id))
-    goal = result.scalar_one_or_none()
-    if not goal:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Goal not found",
-        )
+    goal = await _get_goal_for_user(goal_id, user.id, db)
     await db.delete(goal)
     await db.commit()
 
@@ -155,6 +150,7 @@ async def contribute_to_goal(
     goal_id: uuid.UUID,
     data: GoalContribute,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> Goal:
     """Add a contribution to a goal.
 
@@ -169,13 +165,7 @@ async def contribute_to_goal(
     Raises:
         HTTPException: If goal not found.
     """
-    result = await db.execute(select(Goal).where(Goal.id == goal_id))
-    goal = result.scalar_one_or_none()
-    if not goal:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Goal not found",
-        )
+    goal = await _get_goal_for_user(goal_id, user.id, db)
 
     goal.saved_amount = float(goal.saved_amount) + data.amount
     await db.flush()

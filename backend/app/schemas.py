@@ -7,22 +7,31 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 
 # === User Schemas ===
 
 class UserCreate(BaseModel):
-    """Request schema for creating a new user."""
+    """Request schema for registering a new user."""
     name: str = Field(..., min_length=1, max_length=100, description="Display name")
+    email: EmailStr = Field(..., max_length=255, description="Unique login email")
+    password: str = Field(..., min_length=8, max_length=128, description="Plain password (hashed server-side)")
     preferred_language: str = Field(default="ro", description="Preferred language (ro or en)")
     risk_tolerance: str = Field(default="moderate", description="Risk tolerance (conservative, moderate, aggressive)")
+
+
+class UserLogin(BaseModel):
+    """Request schema for user login."""
+    email: EmailStr = Field(..., max_length=255)
+    password: str = Field(..., min_length=1, max_length=128)
 
 
 class UserResponse(BaseModel):
     """Response schema for user data."""
     id: uuid.UUID
     name: str
+    email: str
     preferred_language: str
     risk_tolerance: str
     created_at: datetime
@@ -89,13 +98,11 @@ class GoalResponse(BaseModel):
 class ChatRequest(BaseModel):
     """Request schema for chat messages."""
     message: str = Field(..., min_length=1, description="User message")
-    user_id: uuid.UUID = Field(..., description="User identifier")
     session_id: str = Field(default="default", description="Conversation thread ID")
 
 
 class ChatSessionCreate(BaseModel):
     """Request schema for creating a chat session."""
-    user_id: uuid.UUID
     title: str = Field(default="New Conversation", max_length=200)
 
 

@@ -6,16 +6,43 @@ and configures CORS for frontend communication.
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import delete
 
-from app.database import create_tables
-from app.api import users_router, goals_router, chat_router, documents_router, transactions_router
+from app.api import auth_router, goals_router, chat_router, documents_router, transactions_router
+from app.config import settings
+from app.database import async_session, create_tables
+from app.models.session import Session
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+async def _cleanup_expired_sessions_once() -> int:
+    """Delete expired auth sessions and return deleted row count."""
+    async with async_session() as session:
+        result = await session.execute(
+            delete(Session).where(Session.expires_at <= datetime.now(timezone.utc))
+        )
+        await session.commit()
+        return int(result.rowcount or 0)
+
+
+async def _expired_session_cleanup_worker(stop_event: asyncio.Event) -> None:
+    """Run periodic cleanup for expired sessions."""
+    interval_seconds = max(60, settings.auth_session_cleanup_interval_seconds)
+    while not stop_event.is_set():
+        deleted = await _cleanup_expired_sessions_once()
+        if deleted:
+            logger.info("Removed %s expired auth sessions.", deleted)
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=interval_seconds)
+        except asyncio.TimeoutError:
+            continue
 
 
 @asynccontextmanager
@@ -32,14 +59,24 @@ async def lifespan(app: FastAPI):
     logger.info("Starting Financial Agent API...")
     await create_tables()
     logger.info("Database tables created.")
-    
+
+    deleted = await _cleanup_expired_sessions_once()
+    if deleted:
+        logger.info("Removed %s expired auth sessions at startup.", deleted)
+
+    cleanup_stop_event = asyncio.Event()
+    cleanup_task = asyncio.create_task(_expired_session_cleanup_worker(cleanup_stop_event))
+
     # Initialize Langgraph checkpointer
     from app.services.agent_service import agent_service
     await agent_service.setup()
     logger.info("Agent service initialized.")
-    
+
     yield
-    
+
+    cleanup_stop_event.set()
+    await cleanup_task
+
     await agent_service.close()
     logger.info("Shutting down Financial Agent API.")
 
@@ -57,14 +94,14 @@ app = FastAPI(
 # CORS — allow frontend (Next.js on :3000) to communicate
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Register routers
-app.include_router(users_router)
+app.include_router(auth_router)
 app.include_router(goals_router)
 app.include_router(chat_router)
 app.include_router(documents_router)

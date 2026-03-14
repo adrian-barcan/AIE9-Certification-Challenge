@@ -1,8 +1,4 @@
-"""User model for simple identity management.
-
-No passwords or authentication — just a name and UUID for demo purposes.
-The user_id is stored in the frontend's localStorage and sent with every request.
-"""
+"""User model for authenticated identity management."""
 
 import uuid
 from datetime import datetime
@@ -17,11 +13,13 @@ from app.database import Base
 
 
 class User(Base):
-    """A user account with simple name-based identity.
+    """A user account with email/password authentication.
 
     Attributes:
         id: UUID primary key.
-        name: Display name entered on first visit.
+        name: Display name entered on registration.
+        email: Unique email used for login.
+        password_hash: Bcrypt hash of the user password.
         preferred_language: User's preferred language (ro/en), auto-detected from chat.
         risk_tolerance: Investment risk tolerance (conservative/moderate/aggressive).
         created_at: Account creation timestamp.
@@ -35,6 +33,8 @@ class User(Base):
         default=uuid.uuid4,
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     preferred_language: Mapped[str] = mapped_column(
         String(5),
         default="ro",
@@ -48,6 +48,7 @@ class User(Base):
 
     # Relationships
     chat_sessions: Mapped[List["ChatSession"]] = relationship("ChatSession", back_populates="user", cascade="all, delete-orphan")
+    sessions: Mapped[List["Session"]] = relationship("Session", back_populates="user", cascade="all, delete-orphan")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

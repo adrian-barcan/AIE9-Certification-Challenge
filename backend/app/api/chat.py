@@ -14,8 +14,10 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_user
 from app.database import get_db
 from app.models.chat import ChatSession
+from app.models.user import User
 from app.schemas import ChatRequest, ChatSessionCreate, ChatSessionResponse, ChatSessionUpdate
 from app.services.agent_service import agent_service
 
@@ -24,9 +26,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 
-async def _get_session_or_404(session_id: str, db: AsyncSession) -> ChatSession:
+async def _get_session_or_404(session_id: str, user_id: uuid.UUID, db: AsyncSession) -> ChatSession:
     """Return the chat session if found and belonging to the current context; else raise 404."""
-    result = await db.execute(select(ChatSession).where(ChatSession.id == session_id))
+    result = await db.execute(
+        select(ChatSession).where(ChatSession.id == session_id, ChatSession.user_id == user_id)
+    )
     session = result.scalars().first()
     if not session:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
@@ -34,24 +38,30 @@ async def _get_session_or_404(session_id: str, db: AsyncSession) -> ChatSession:
 
 
 @router.post("/")
-async def chat(data: ChatRequest) -> StreamingResponse:
+async def chat(
+    data: ChatRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> StreamingResponse:
     """Send a message to the financial agent and receive a streaming response.
 
     Uses Server-Sent Events (SSE) to stream tokens as they are generated.
 
     Args:
-        data: Chat request with message, user_id, and session_id.
+        data: Chat request with message and session_id.
 
     Returns:
         Streaming response with agent's reply tokens.
     """
+
+    await _get_session_or_404(data.session_id, user.id, db)
 
     async def event_stream():
         """Generate SSE events from agent response (tokens and status placeholders)."""
         try:
             async for item in agent_service.stream(
                 message=data.message,
-                user_id=str(data.user_id),
+                user_id=str(user.id),
                 session_id=data.session_id,
             ):
                 # item is either {"token": str} or {"status": str}
@@ -81,13 +91,17 @@ async def chat(data: ChatRequest) -> StreamingResponse:
 
 
 @router.post("/sync")
-async def chat_sync(data: ChatRequest) -> dict:
+async def chat_sync(
+    data: ChatRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
     """Send a message and get a complete (non-streaming) response.
 
     Useful for testing and programmatic access.
 
     Args:
-        data: Chat request with message, user_id, and session_id.
+        data: Chat request with message and session_id.
 
     Returns:
         Dict with the full agent response.
@@ -96,9 +110,10 @@ async def chat_sync(data: ChatRequest) -> dict:
         HTTPException: 503 if the agent is temporarily unavailable.
     """
     try:
+        await _get_session_or_404(data.session_id, user.id, db)
         response = await agent_service.chat(
             message=data.message,
-            user_id=str(data.user_id),
+            user_id=str(user.id),
             session_id=data.session_id,
         )
         return {"response": response}
@@ -111,7 +126,11 @@ async def chat_sync(data: ChatRequest) -> dict:
 
 
 @router.get("/history/{session_id}")
-async def get_chat_history(session_id: str) -> list:
+async def get_chat_history(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> list:
     """Get conversation history for a session.
 
     Args:
@@ -120,25 +139,33 @@ async def get_chat_history(session_id: str) -> list:
     Returns:
         List of messages in the conversation.
     """
+    await _get_session_or_404(session_id, user.id, db)
     return await agent_service.get_history(session_id)
 
 
-@router.get("/sessions/{user_id}", response_model=list[ChatSessionResponse])
-async def get_chat_sessions(user_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    """Get all chat sessions for a specific user."""
+@router.get("/sessions", response_model=list[ChatSessionResponse])
+async def get_chat_sessions(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Get all chat sessions for the current user."""
     result = await db.execute(
-        select(ChatSession).where(ChatSession.user_id == user_id).order_by(ChatSession.updated_at.desc())
+        select(ChatSession).where(ChatSession.user_id == user.id).order_by(ChatSession.updated_at.desc())
     )
     return result.scalars().all()
 
 
 @router.post("/sessions", response_model=ChatSessionResponse)
-async def create_chat_session(data: ChatSessionCreate, db: AsyncSession = Depends(get_db)):
+async def create_chat_session(
+    data: ChatSessionCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     """Create a new chat session for a user."""
     session_id = str(uuid.uuid4())
     new_session = ChatSession(
         id=session_id,
-        user_id=data.user_id,
+        user_id=user.id,
         title=data.title,
     )
     db.add(new_session)
@@ -148,9 +175,14 @@ async def create_chat_session(data: ChatSessionCreate, db: AsyncSession = Depend
 
 
 @router.patch("/sessions/{session_id}", response_model=ChatSessionResponse)
-async def update_chat_session(session_id: str, data: ChatSessionUpdate, db: AsyncSession = Depends(get_db)):
+async def update_chat_session(
+    session_id: str,
+    data: ChatSessionUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     """Update a chat session (e.g. title)."""
-    session = await _get_session_or_404(session_id, db)
+    session = await _get_session_or_404(session_id, user.id, db)
     session.title = data.title
     await db.commit()
     await db.refresh(session)
@@ -158,9 +190,13 @@ async def update_chat_session(session_id: str, data: ChatSessionUpdate, db: Asyn
 
 
 @router.delete("/sessions/{session_id}")
-async def delete_chat_session(session_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_chat_session(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     """Delete a chat session."""
-    session = await _get_session_or_404(session_id, db)
+    session = await _get_session_or_404(session_id, user.id, db)
     await db.delete(session)
     await db.commit()
     return {"status": "deleted"}

@@ -42,6 +42,17 @@ interface Message {
     content: string;
 }
 
+const getActiveSessionStorageKey = (userId: string) =>
+    `baniwise.chat.activeSession:${userId}`;
+
+const pickMostRecentSession = (chatSessions: ChatSession[]): ChatSession | null => {
+    if (chatSessions.length === 0) return null;
+    return [...chatSessions].sort(
+        (a, b) =>
+            new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+    )[0];
+};
+
 export default function ChatPage() {
     const searchParams = useSearchParams();
     const { user } = useUser();
@@ -115,10 +126,20 @@ export default function ChatPage() {
     useEffect(() => {
         if (user && !isInitializingRef.current) {
             isInitializingRef.current = true;
-            getChatSessions(user.id).then(data => {
+            getChatSessions().then(data => {
                 setSessions(data);
                 if (data.length > 0) {
-                    setCurrentSessionId(data[0].id);
+                    const storedSessionId = window.localStorage.getItem(
+                        getActiveSessionStorageKey(user.id)
+                    );
+                    const storedSession = storedSessionId
+                        ? data.find((session) => session.id === storedSessionId) ?? null
+                        : null;
+                    const fallbackSession = pickMostRecentSession(data);
+                    const initialSession = storedSession ?? fallbackSession;
+                    if (initialSession) {
+                        setCurrentSessionId(initialSession.id);
+                    }
                 } else {
                     createNewSession();
                 }
@@ -144,10 +165,20 @@ export default function ChatPage() {
         }
     }, [currentSessionId]);
 
+    useEffect(() => {
+        if (!user) return;
+        const storageKey = getActiveSessionStorageKey(user.id);
+        if (currentSessionId) {
+            window.localStorage.setItem(storageKey, currentSessionId);
+        } else {
+            window.localStorage.removeItem(storageKey);
+        }
+    }, [user, currentSessionId]);
+
     const createNewSession = async () => {
         if (!user) return;
         try {
-            const newSession = await createChatSession(user.id, "New Conversation");
+            const newSession = await createChatSession("New Conversation");
             setSessions(prev => [newSession, ...prev]);
             setCurrentSessionId(newSession.id);
             setMessages([]);
@@ -186,7 +217,7 @@ export default function ChatPage() {
         if (!activeSessionId) {
             try {
                 const newTitle = text.trim().slice(0, 30) + (text.length > 30 ? "..." : "");
-                const newSession = await createChatSession(user.id, newTitle);
+                const newSession = await createChatSession(newTitle);
                 setSessions(prev => [newSession, ...prev]);
                 setCurrentSessionId(newSession.id);
                 activeSessionId = newSession.id;
@@ -218,7 +249,6 @@ export default function ChatPage() {
         try {
             await sendMessageStream(
                 text.trim(),
-                user.id,
                 activeSessionId,
                 (token) => {
                     setStreamingStatuses([]);
@@ -263,7 +293,7 @@ export default function ChatPage() {
 
             // Optionally, refresh session list to show updated titles
             if (activeSessionId && messages.length === 0) {
-                getChatSessions(user.id).then(setSessions).catch(console.error);
+                getChatSessions().then(setSessions).catch(console.error);
             }
         }
     };
