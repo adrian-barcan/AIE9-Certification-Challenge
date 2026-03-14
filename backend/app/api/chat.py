@@ -63,7 +63,12 @@ async def chat(data: ChatRequest) -> StreamingResponse:
         except Exception as e:
             logger.error(f"Chat stream error: {e}")
             logger.error(traceback.format_exc())
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            err_msg = str(e).lower()
+            retryable = any(
+                x in err_msg
+                for x in ["timeout", "connection", "503", "unavailable", "temporarily", "network"]
+            )
+            yield f"data: {json.dumps({'error': str(e), 'retryable': retryable})}\n\n"
 
     return StreamingResponse(
         event_stream(),

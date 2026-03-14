@@ -23,7 +23,7 @@ Implements 3 of the 5 cognitive memory types from the CoALA framework using Lang
 A highly optimized document retrieval system designed to ingest and query Romanian financial PDFs:
 - **Ingestion**: Document parsing via `PyMuPDFLoader` and intelligent chunking (`RecursiveCharacterTextSplitter`).
 - **Vector Storage**: `text-embedding-3-small` embeddings stored securely in a **Qdrant Vector DB**.
-- **Contextual Compression**: Two-stage retrieval using **Cohere Rerank** (`rerank-multilingual-v3.0`). Searches pull the top-K documents from Qdrant, which Cohere then reranks to provide the precise top-N most contextually relevant chunks to the LLM.
+- **Contextual Compression**: Two-stage retrieval using **Cohere Rerank** (`rerank-v4.0-fast`). Searches pull the top-K documents from Qdrant, which Cohere then reranks to provide the precise top-N most contextually relevant chunks to the LLM.
 
 ### 4. Synthetic Data Generation (SDG) & Evaluation (RAGAS)
 The `backend/notebooks/sdg_and_evaluation.ipynb` notebook contains a robust, programmatic evaluation suite. It uses the key document pair **`Ghid_TEZAUR_si_FIDELIS.pdf`** and **`ghidul_investitorului.pdf`** for SDG and RAG evaluation:
@@ -139,7 +139,7 @@ flowchart TB
         VecRet[Vector Retriever<br/>ParentDocumentRetriever]
         BM25[BM25 Retriever]
         Ensemble[Ensemble Retriever<br/>0.2 BM25 + 0.8 Vector]
-        Rerank[Cohere Rerank<br/>rerank-multilingual-v3.0]
+        Rerank[Cohere Rerank<br/>rerank-v4.0-fast]
         TopN[Top-N Chunks]
         Format[Formatted Context]
         Q --> EmbQ
@@ -304,7 +304,7 @@ Diagrams are defined in Mermaid in this README and in [CERTIFICATION_DELIVERABLE
 | **Agent Framework** | LangChain + LangGraph |
 | **Vector DB** | Qdrant |
 | **Embeddings** | OpenAI `text-embedding-3-small` |
-| **Reranking** | Cohere `rerank-multilingual-v3.0` |
+| **Reranking** | Cohere `rerank-v4.0-fast` |
 | **Web Search** | Tavily API |
 | **Evaluation Suite** | RAGAS (`ragas`) + Jupyter notebook for SDG and evals |
 | **Backend API** | FastAPI (Python 3.11) |

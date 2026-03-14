@@ -47,6 +47,40 @@ from app.services.memory_service import memory_service
 
 logger = logging.getLogger(__name__)
 
+
+def _detect_response_language(message: str) -> str:
+    """Detect if user message is in English or Romanian. Returns 'en' or 'ro'."""
+    if not message or len(message.strip()) < 2:
+        return "ro"
+    t = message.strip().lower()
+    # Romanian diacritics → Romanian
+    if any(c in t for c in "ăâîșț"):
+        return "ro"
+    # Common English words (high signal for short messages)
+    en_markers = ("is ", " are ", " what ", " how ", " why ", " when ", " where ", " which ", " can ", " does ", " do ", " the ", " a ", " an ", " good ", " bad ", " invest", " tool", "?")
+    en_count = sum(1 for m in en_markers if m in t)
+    # Common Romanian words
+    ro_markers = (" ce ", " cum ", " care ", " unde ", " când ", " pentru ", " este ", " sunt ", " din ", " cu ", " la ", " în ")
+    ro_count = sum(1 for m in ro_markers if m in t)
+    return "en" if en_count >= ro_count else "ro"
+
+
+async def _get_user_language(user_id: str) -> str:
+    """Fetch user's preferred language from the database. Defaults to 'ro' if not found."""
+    try:
+        from app.database import async_session
+        from sqlalchemy import select
+        from app.models.user import User
+
+        async with async_session() as db:
+            result = await db.execute(select(User).where(User.id == uuid.UUID(user_id)))
+            user = result.scalars().first()
+            if user and user.preferred_language:
+                return user.preferred_language
+    except Exception as e:
+        logger.debug("Could not fetch user language: %s", e)
+    return "ro"
+
 # ===================================================================
 # System Prompts
 # ===================================================================
@@ -57,17 +91,17 @@ Your name is BaniWise. You help users with:
 2. Real-time market data and financial news
 3. Managing financial savings goals
 
-IMPORTANT STRICT LANGUAGE RULES:
-- ALWAYS respond in the SAME LANGUAGE the user writes in. Auto-detect the language from the user's message.
-- If the user writes in ENGLISH, you MUST respond ENTIRELY in ENGLISH. You must translate any Romanian information retrieved from your tools into English.
-- If the user writes in ROMANIAN, you MUST respond ENTIRELY in ROMANIAN.
-- Even if the documents or tools return Romanian text, you MUST TRANSLATE your final answer into the user's language.
+CRITICAL LANGUAGE RULE (MUST OBEY):
+{response_language}
+- The documents/tools return Romanian text. You MUST translate and respond in the user's language. Never respond in Romanian when the user wrote in English.
 
 OTHER RULES:
 - When discussing investment products, ALWAYS add a MiFID II disclaimer at the end. Translate this disclaimer to match the user's language.
 - Cite sources when using information from documents. Use the reference numbers (e.g., [1], [2]) inline, and ALWAYS append a "Sources:" or "Surse:" list at the very end mapping those numbers to their source files and pages.
 - Be helpful, professional, and encouraging about financial goals.
 - Use the appropriate specialist tool for each type of query.
+- When the retrieved context is narrow, expand your answer to fully address the question while staying faithful to the context. If the user asks a broad question, structure the response with clear sections.
+- NEVER output raw search result titles, URLs, or bullet lists of tool output as your response. Always synthesize the information into a coherent, natural answer. Do not echo or list search titles like "opțiuni optime de investiție..." — instead, explain the content in your own words.
 
 You have access to the following tools:
 - rag_query: Search Romanian financial documents (regulations, TEZAUR, FIDELIS, BVB guides)
@@ -144,18 +178,25 @@ async def market_search(query: str) -> str:
     """
     try:
         client = AsyncTavilyClient(api_key=settings.tavily_api_key)
-        response = await client.search(
-            query=query,
-            search_depth="advanced",
-            max_results=3,
-            include_answer=True,
-        )
-        # Format results
+        search_kwargs: dict = {
+            "query": query,
+            "search_depth": "advanced",
+            "max_results": 5,
+            "include_answer": True,
+        }
+        if any(
+            term in query.lower()
+            for term in ["eur/ron", "ron/eur", "curs", "rate", "bvb", "tezaur", "fidelis", "bnr"]
+        ):
+            search_kwargs["include_domains"] = ["bnr.ro", "bvb.ro", "mfinante.ro"]
+        response = await client.search(**search_kwargs)
+        # Format results (400 chars per snippet for richer financial context)
         parts = []
         if response.get("answer"):
             parts.append(f"Summary: {response['answer']}")
-        for result in response.get("results", [])[:3]:
-            parts.append(f"- {result.get('title', 'N/A')}: {result.get('content', '')[:200]}")
+        for result in response.get("results", [])[:5]:
+            content = result.get("content", "")[:400]
+            parts.append(f"- {result.get('title', 'N/A')}: {content}")
             parts.append(f"  Source: {result.get('url', '')}")
         return "\n".join(parts) if parts else "No relevant results found."
     except Exception as e:
@@ -180,9 +221,10 @@ async def goals_summary(user_id: str) -> str:
         from app.database import async_session
         from app.services.goals_service import GoalsService
 
+        language = await _get_user_language(user_id)
         async with async_session() as db:
             service = GoalsService(db)
-            summary = await service.get_goals_summary(uuid.UUID(user_id))
+            summary = await service.get_goals_summary(uuid.UUID(user_id), language=language)
             return summary
     except Exception as e:
         logger.error(f"Goals summary failed: {e}")
@@ -207,9 +249,12 @@ async def savings_insights(user_id: str) -> str:
         from app.database import async_session
         from app.services.transaction_service import TransactionService
 
+        language = await _get_user_language(user_id)
         async with async_session() as db:
             service = TransactionService(db)
-            summary = await service.get_savings_insights_summary(uuid.UUID(user_id))
+            summary = await service.get_savings_insights_summary(
+                uuid.UUID(user_id), language=language
+            )
             return summary
     except Exception as e:
         logger.error(f"Savings insights failed: {e}")
@@ -258,6 +303,15 @@ async def create_goal(
             months = GoalsService.calculate_months_to_goal(
                 target_amount, 0, monthly_contribution
             )
+            language = await _get_user_language(user_id)
+            is_en = language and language.lower().startswith("en")
+            if is_en:
+                months_text = f" (~{months} months)" if months else ""
+                return (
+                    f"✅ Goal created: {icon} {name}\n"
+                    f"Target: {target_amount:,.0f} {currency}{months_text}\n"
+                    f"Monthly contribution: {monthly_contribution:,.0f} {currency}"
+                )
             months_text = f" (~{months} luni)" if months else ""
             return (
                 f"✅ Obiectiv creat: {icon} {name}\n"
@@ -296,6 +350,7 @@ class AgentService:
             api_key=settings.openai_api_key,
             temperature=0.3,
             streaming=True,
+            max_retries=3,
         )
         self.tools = [rag_query, market_search, goals_summary, savings_insights, create_goal]
         self.pool = None
@@ -395,6 +450,33 @@ class AgentService:
         namespace = (user_id, "profile")
         await self.store.aput(namespace, key, {"value": value})
 
+    async def _consolidate_memory(
+        self, user_id: str, user_message: str, assistant_response: str
+    ) -> None:
+        """Extract and persist user preferences and financial facts from a conversation turn."""
+        if not self.store:
+            return
+        extracted = await memory_service.extract_facts_and_preferences(
+            user_message, assistant_response
+        )
+        profile_namespace = (user_id, "profile")
+        knowledge_namespace = (user_id, "knowledge")
+        for key, value in (extracted.get("preferences") or {}).items():
+            if value:
+                try:
+                    await self.store.aput(profile_namespace, key, {"value": value})
+                    logger.debug("Saved preference %s for user %s", key, user_id)
+                except Exception as e:
+                    logger.warning("Failed to save preference: %s", e)
+        for fact in (extracted.get("facts") or [])[:3]:
+            if fact and len(fact.strip()) > 10:
+                try:
+                    key = f"fact_{uuid.uuid4().hex[:12]}"
+                    await self.store.aput(knowledge_namespace, key, {"fact": fact.strip()})
+                    logger.debug("Saved fact for user %s", user_id)
+                except Exception as e:
+                    logger.warning("Failed to save fact: %s", e)
+
     async def _prepare_turn(
         self, message: str, user_id: str, session_id: str = "default"
     ) -> tuple[dict, dict]:
@@ -405,10 +487,17 @@ class AgentService:
         """
         user_context = await self._get_user_context(user_id, session_id)
         current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        lang = _detect_response_language(message)
+        response_lang_instruction = (
+            "- You MUST respond ENTIRELY in ENGLISH. Translate all Romanian content from tools into English. Use 'Sources:' for the references list."
+            if lang == "en"
+            else "- You MUST respond ENTIRELY in ROMANIAN. Use 'Surse:' for the references list."
+        )
         system_prompt = SUPERVISOR_SYSTEM_PROMPT.format(
             user_context=user_context,
             user_id=user_id,
             current_date=current_date,
+            response_language=response_lang_instruction,
         )
         config = {
             "configurable": {
@@ -453,6 +542,7 @@ class AgentService:
                     user_context=user_context,
                     user_id=user_id,
                     current_date=current_date,
+                    response_language=response_lang_instruction,
                 )
 
         input_messages = {
@@ -486,7 +576,9 @@ class AgentService:
             m for m in response["messages"] if isinstance(m, AIMessage) and m.content
         ]
         if ai_messages:
-            return ai_messages[-1].content
+            content = ai_messages[-1].content
+            await self._consolidate_memory(user_id, message, content)
+            return content
         return "I could not generate a response."
 
     async def stream(
@@ -510,6 +602,7 @@ class AgentService:
             Either a content string or a dict with "token" or "status" key.
         """
         input_messages, config = await self._prepare_turn(message, user_id, session_id)
+        full_content: list[str] = []
         async for event in self.graph.astream_events(
             input_messages, config=config, version="v2"
         ):
@@ -521,7 +614,11 @@ class AgentService:
                 event["event"] == "on_chat_model_stream"
                 and event["data"]["chunk"].content
             ):
-                yield {"token": event["data"]["chunk"].content}
+                token = event["data"]["chunk"].content
+                full_content.append(token)
+                yield {"token": token}
+        if full_content:
+            await self._consolidate_memory(user_id, message, "".join(full_content))
 
     async def get_history(self, session_id: str) -> list[dict]:
         """Get conversation history for a session.

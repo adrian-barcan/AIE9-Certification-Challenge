@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     # === LangSmith ===
     langsmith_api_key: str = Field(default="", description="LangSmith API key")
-    langchain_tracing_v2: bool = Field(default=True, description="Enable LangChain tracing")
+    langchain_tracing_v2: bool = Field(default=False, description="Enable LangChain tracing (disable if rate-limited)")
     langchain_project: str = Field(default="financial-agent", description="LangSmith project name")
 
     @model_validator(mode="after")

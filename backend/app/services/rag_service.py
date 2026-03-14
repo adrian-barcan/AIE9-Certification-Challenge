@@ -19,7 +19,8 @@ from typing import Optional
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_community.retrievers import BM25Retriever
 from langchain_core.documents import Document
-from langchain_openai import OpenAIEmbeddings
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_cohere import CohereRerank
 from langchain.retrievers import ParentDocumentRetriever, EnsembleRetriever
@@ -59,6 +60,7 @@ class RAGService:
         self.embeddings = OpenAIEmbeddings(
             model=settings.embedding_model,
             openai_api_key=settings.openai_api_key,
+            max_retries=3,
         )
         self.parent_splitter = RecursiveCharacterTextSplitter(
             chunk_size=settings.rag_parent_chunk_size,
@@ -78,10 +80,57 @@ class RAGService:
         self.bm25_retriever: Optional[BM25Retriever] = None
         
         self.reranker = CohereRerank(
-            model="rerank-multilingual-v3.0",
+            model="rerank-v4.0-fast",
             cohere_api_key=settings.cohere_api_key,
             top_n=settings.rag_rerank_top_n,
         )
+        self._query_expansion_llm = ChatOpenAI(
+            model=settings.specialist_model,
+            openai_api_key=settings.openai_api_key,
+            temperature=0.2,
+            max_retries=3,
+        )
+
+    async def _expand_query(self, question: str) -> list[str]:
+        """Generate 2-3 query variants (formal + keyword-focused) for multi-query retrieval.
+        Helps when colloquial Romanian queries miss chunks written in formal/legal terminology.
+        """
+        if not question or len(question.strip()) < 3:
+            return [question]
+        try:
+            prompt = SystemMessage(
+                content="You are a query expander for a Romanian financial document search. "
+                "Given a user question, output exactly 2 alternative phrasings that would help find "
+                "relevant documents. Use formal/legal terminology (e.g. 'titluri de stat' for bonds), "
+                "official product names (TEZAUR, FIDELIS, BVB), and regulatory terms. "
+                "Output ONLY the 2 alternative questions, one per line, no numbering or explanation."
+            )
+            response = await self._query_expansion_llm.ainvoke(
+                [prompt, HumanMessage(content=f"Original question: {question}")]
+            )
+            variants = [
+                line.strip()
+                for line in (response.content or "").strip().split("\n")
+                if line.strip() and len(line.strip()) > 5
+            ][:2]
+            if variants:
+                return [question] + variants
+        except Exception as e:
+            logger.warning("Query expansion failed, using original only: %s", e)
+        return [question]
+
+    @staticmethod
+    def _is_romanian_query(text: str) -> bool:
+        """Heuristic: treat as Romanian if it contains diacritics or common Romanian words."""
+        if not text or len(text.strip()) < 3:
+            return False
+        t = text.strip().lower()
+        # Romanian diacritics
+        if any(c in t for c in "ăâîșț"):
+            return True
+        # Common Romanian words (short, high signal)
+        ro_markers = ("ce ", " cum ", " care ", " unde ", " când ", " de ce ", " este ", " sunt ", " pentru ", " din ", " cu ", " la ", " în ")
+        return any(m in t for m in ro_markers)
 
     @staticmethod
     def _text_overlap_ratio(text_a: str, text_b: str) -> float:
@@ -255,6 +304,7 @@ class RAGService:
         top_k: Optional[int] = None,
         use_reranking: bool = True,
         use_ensemble: bool = True,
+        use_multi_query: bool = True,
     ) -> list[Document]:
         """Retrieve relevant parent document chunks.
 
@@ -264,40 +314,56 @@ class RAGService:
             use_reranking: Whether to apply Cohere reranking.
             use_ensemble: Whether to use BM25+Vector ensemble (True) or
                 dense vector only via ParentDocumentRetriever (False).
+            use_multi_query: Whether to expand query with variants for better recall.
 
         Returns:
             List of relevant Document chunks, ordered by relevance.
         """
         top_k = top_k or settings.rag_top_k
         self.vector_store = self._ensure_vector_store()
-        
+
         # Make sure BM25/DocStore is loaded
         if not self.bm25_retriever or not self.docstore.store:
             self._load_or_init_bm25(settings.documents_path)
-            
+
         parent_retriever = ParentDocumentRetriever(
             vectorstore=self.vector_store,
             docstore=self.docstore,
             child_splitter=self.child_splitter,
             parent_splitter=self.parent_splitter,
-            search_kwargs={"k": top_k}
+            search_kwargs={"k": top_k},
         )
 
         if use_ensemble and self.bm25_retriever:
             self.bm25_retriever.k = top_k
             retriever = EnsembleRetriever(
                 retrievers=[self.bm25_retriever, parent_retriever],
-                weights=[0.2, 0.8]
+                weights=[0.2, 0.8],
             )
         else:
             if use_ensemble and not self.bm25_retriever:
                 logger.warning("BM25 not loaded, falling back to pure Vector search.")
             retriever = parent_retriever
 
-        raw_results = await retriever.ainvoke(question)
-        deduped = self._deduplicate_docs(raw_results)
+        # Multi-query retrieval: query variants improve recall for colloquial vs formal docs.
+        # Skip expansion for English queries to avoid retrieving Romanian FAQ chunks that leak into responses.
+        queries = (
+            await self._expand_query(question)
+            if use_multi_query and self._is_romanian_query(question)
+            else [question]
+        )
+        all_docs: list[Document] = []
+        seen_ids: set[str] = set()
+        for q in queries:
+            raw = await retriever.ainvoke(q)
+            for doc in raw:
+                doc_id = hash(doc.page_content)
+                if doc_id not in seen_ids:
+                    seen_ids.add(doc_id)
+                    all_docs.append(doc)
+        deduped = self._deduplicate_docs(all_docs)
         logger.info(
-            f"Query: '{question[:50]}...' → {len(raw_results)} raw, "
+            f"Query: '{question[:50]}...' ({len(queries)} variants) → {len(all_docs)} merged, "
             f"{len(deduped)} after dedup"
         )
 
@@ -318,6 +384,7 @@ class RAGService:
         if not results:
             return "No relevant information found in the indexed documents."
 
+        header = f"Question being answered: {question}\n\n"
         context_parts = []
         for i, doc in enumerate(results, 1):
             source = doc.metadata.get("source_file", "unknown")
@@ -326,7 +393,7 @@ class RAGService:
                 f"[{i}] (Source: {source}, Page: {page})\n{doc.page_content}"
             )
 
-        return "\n\n---\n\n".join(context_parts)
+        return header + "\n\n---\n\n".join(context_parts)
 
     async def get_collection_info(self) -> dict:
         """Get information about the current Qdrant collection."""

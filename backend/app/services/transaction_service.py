@@ -161,18 +161,31 @@ class TransactionService:
         result = await self.db.execute(q)
         return list(result.scalars().all())
 
-    async def get_savings_insights_summary(self, user_id: uuid.UUID) -> str:
+    async def get_savings_insights_summary(
+        self, user_id: uuid.UUID, language: str = "ro"
+    ) -> str:
         """Build anonymized summary for the agent: spending by category, recurring, fees.
         Used by savings_insights tool; only aggregates, no PII.
+
+        Args:
+            user_id: The user's UUID.
+            language: User's preferred language (ro/en) for output formatting.
         """
         since = datetime.utcnow() - timedelta(days=settings.savings_insights_days)
         txs = await self.list_transactions(
             user_id=user_id, from_date=since, limit=settings.savings_insights_limit
         )
+        is_en = language and language.lower().startswith("en")
+
         if not txs:
+            if is_en:
+                return (
+                    "The user has no imported transactions yet. "
+                    "Suggest they upload a CSV bank statement from the Transactions page to get saving opportunities."
+                )
             return (
-                "The user has no imported transactions yet. "
-                "Suggest they upload a CSV bank statement from the Transactions page to get saving opportunities."
+                "Utilizatorul nu a importat încă tranzacții. "
+                "Sugerați încărcarea unui extras de cont CSV din pagina Tranzacții pentru a obține sugestii de economii."
             )
         # Outflows (negative amount) by category
         by_category: dict[str, float] = defaultdict(float)
@@ -188,13 +201,47 @@ class TransactionService:
                 recurring_total += out
             if t.category.endswith("_FEE"):
                 fee_total += out
-        lines = ["Anonymized transaction summary (categories and amounts only):"]
-        lines.append("Monthly spending by category (outflows, last 12 months):")
+
+        if is_en:
+            lines = ["Anonymized transaction summary (categories and amounts only):"]
+            lines.append("Monthly spending by category (outflows, last 12 months):")
+            recurring_label = "Recurring outflows (total)"
+            fees_label = "Fees (total)"
+            total_label = "Total transactions considered"
+        else:
+            lines = ["Rezumat tranzacții anonimizate (categorii și sume):"]
+            lines.append("Cheltuieli lunare pe categorii (ieșiri, ultimele 12 luni):")
+            recurring_label = "Ieșiri recurente (total)"
+            fees_label = "Comisioane (total)"
+            total_label = "Total tranzacții analizate"
+
         for cat in sorted(by_category.keys()):
             lines.append(f"  - {cat}: {by_category[cat]:,.0f} RON")
         if recurring_total > 0:
-            lines.append(f"Recurring outflows (total): {recurring_total:,.0f} RON")
+            lines.append(f"{recurring_label}: {recurring_total:,.0f} RON")
         if fee_total > 0:
-            lines.append(f"Fees (total): {fee_total:,.0f} RON")
-        lines.append(f"Total transactions considered: {len(txs)}")
+            lines.append(f"{fees_label}: {fee_total:,.0f} RON")
+        lines.append(f"{total_label}: {len(txs)}")
+
+        # Add suggested focus for actionable advice when fees or recurring are significant
+        if fee_total > 100 or recurring_total > 500:
+            if is_en:
+                focus_parts = []
+                if fee_total > 100:
+                    focus_parts.append(f"FEES ({fee_total:,.0f} RON)")
+                if recurring_total > 500:
+                    focus_parts.append(f"RECURRING ({recurring_total:,.0f} RON)")
+                lines.append(
+                    f"Consider reviewing: {' and '.join(focus_parts)} for saving opportunities."
+                )
+            else:
+                focus_parts = []
+                if fee_total > 100:
+                    focus_parts.append(f"COMISIOANE ({fee_total:,.0f} RON)")
+                if recurring_total > 500:
+                    focus_parts.append(f"RECURENTE ({recurring_total:,.0f} RON)")
+                lines.append(
+                    f"Sugestie: analizați {' și '.join(focus_parts)} pentru oportunități de economii."
+                )
+
         return "\n".join(lines)

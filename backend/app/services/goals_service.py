@@ -200,20 +200,35 @@ class GoalsService:
 
         return result
 
-    async def get_goals_summary(self, user_id: uuid.UUID) -> str:
+    async def get_goals_summary(self, user_id: uuid.UUID, language: str = "ro") -> str:
         """Generate a text summary of all user goals for the agent.
 
         Args:
             user_id: The user's UUID.
+            language: User's preferred language (ro/en) for output formatting.
 
         Returns:
             Formatted text summary of all goals with progress and feasibility.
         """
         goals = await self.list_goals(user_id)
-        if not goals:
-            return "Utilizatorul nu are obiective financiare definite."
+        is_en = language and language.lower().startswith("en")
 
-        lines = [f"Obiective financiare ({len(goals)} total):\n"]
+        if not goals:
+            return "The user has no financial goals defined." if is_en else "Utilizatorul nu are obiective financiare definite."
+
+        if is_en:
+            lines = [f"Financial goals ({len(goals)} total):\n"]
+            months_label = "months remaining at"
+            per_month = "/month"
+            on_track = "on track"
+            behind = "behind"
+        else:
+            lines = [f"Obiective financiare ({len(goals)} total):\n"]
+            months_label = "luni rămase la"
+            per_month = "/lună"
+            on_track = "pe drumul cel bun"
+            behind = "în urmă"
+
         for g in goals:
             feasibility = self.check_goal_feasibility(
                 float(g.target_amount),
@@ -228,9 +243,9 @@ class GoalsService:
                 f"({g.progress_percent:.0f}%)"
             )
             if feasibility.get("months_needed"):
-                lines.append(f"   → {feasibility['months_needed']} luni rămase la {g.monthly_contribution:,.0f} {g.currency}/lună")
+                lines.append(f"   → {feasibility['months_needed']} {months_label} {g.monthly_contribution:,.0f} {g.currency}{per_month}")
             if feasibility.get("on_track") is not None:
-                track = "pe drumul cel bun" if feasibility["on_track"] else "în urmă"
+                track = on_track if feasibility["on_track"] else behind
                 lines.append(f"   → Status: {track}")
 
         return "\n".join(lines)

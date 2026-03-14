@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { useUser } from "@/lib/UserContext";
 import { useLanguage } from "@/lib/LanguageContext";
-import { sendMessageStream, getChatSessions, getChatHistory, createChatSession, deleteChatSession, updateChatSession, ChatSession } from "@/lib/api";
+import { sendMessageStream, getChatSessions, getChatHistory, createChatSession, deleteChatSession, updateChatSession, ChatSession, ChatStreamError } from "@/lib/api";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Image from "next/image";
@@ -64,7 +64,8 @@ export default function ChatPage() {
         }
     }, [searchParams]);
     const [isStreaming, setIsStreaming] = useState(false);
-    const [streamingStatus, setStreamingStatus] = useState<string | null>(null);
+    const [streamingStatuses, setStreamingStatuses] = useState<string[]>([]);
+    const [retryableError, setRetryableError] = useState<{ message: string; lastText: string } | null>(null);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -178,6 +179,8 @@ export default function ChatPage() {
     const sendMessage = async (text: string) => {
         if (!text.trim() || !user || isStreaming) return;
 
+        setRetryableError(null);
+
         // If no session exists, create one first (failsafe)
         let activeSessionId = currentSessionId;
         if (!activeSessionId) {
@@ -218,7 +221,7 @@ export default function ChatPage() {
                 user.id,
                 activeSessionId,
                 (token) => {
-                    setStreamingStatus(null);
+                    setStreamingStatuses([]);
                     setMessages((prev) => {
                         const updated = [...prev];
                         const last = updated[updated.length - 1];
@@ -231,29 +234,45 @@ export default function ChatPage() {
                         return updated;
                     });
                 },
-                (status) => setStreamingStatus(status)
+                (status) => setStreamingStatuses((prev) => {
+                    if (prev[prev.length - 1] === status) return prev;
+                    return [...prev, status];
+                })
             );
-        } catch {
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : t("chat_error_connect");
+            const retryable = err instanceof ChatStreamError && err.retryable;
             setMessages((prev) => {
                 const updated = [...prev];
                 const last = updated[updated.length - 1];
                 if (last.role === "assistant" && !last.content) {
                     updated[updated.length - 1] = {
                         ...last,
-                        content: t("chat_error_connect"),
+                        content: errorMessage,
                     };
                 }
                 return updated;
             });
+            if (retryable) {
+                setRetryableError({ message: errorMessage, lastText: text.trim() });
+            }
         } finally {
             setIsStreaming(false);
-            setStreamingStatus(null);
+            setStreamingStatuses([]);
             // focus is handled by the useEffect on isStreaming
 
             // Optionally, refresh session list to show updated titles
             if (activeSessionId && messages.length === 0) {
                 getChatSessions(user.id).then(setSessions).catch(console.error);
             }
+        }
+    };
+
+    const handleRetry = () => {
+        if (retryableError?.lastText) {
+            const textToRetry = retryableError.lastText;
+            setRetryableError(null);
+            sendMessage(textToRetry);
         }
     };
 
@@ -360,20 +379,10 @@ export default function ChatPage() {
                                             : "bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border)] rounded-tl-sm"
                                             }`}
                                     >
-                                        {msg.role === "assistant" && isStreaming && i === messages.length - 1 && !msg.content && !streamingStatus ? (
-                                            <div className="flex gap-1.5 py-1 px-1">
-                                                <div className="w-2 h-2 rounded-full bg-current opacity-40 typing-dot" />
-                                                <div
-                                                    className="w-2 h-2 rounded-full bg-current opacity-40 typing-dot"
-                                                    style={{ animationDelay: "0.2s" }}
-                                                />
-                                                <div
-                                                    className="w-2 h-2 rounded-full bg-current opacity-40 typing-dot"
-                                                    style={{ animationDelay: "0.4s" }}
-                                                />
-                                            </div>
-                                        ) : msg.role === "assistant" && isStreaming && i === messages.length - 1 && streamingStatus ? (
-                                            <span className="text-[var(--text-muted)] italic">{streamingStatus}</span>
+                                        {msg.role === "assistant" && isStreaming && i === messages.length - 1 && !msg.content && streamingStatuses.length === 0 ? (
+                                            <span className="text-[var(--text-muted)] italic">Thinking…</span>
+                                        ) : msg.role === "assistant" && isStreaming && i === messages.length - 1 && streamingStatuses.length > 0 ? (
+                                            <span className="text-[var(--text-muted)] italic">{streamingStatuses.join(" • ")}</span>
                                         ) : msg.role === "assistant" ? (
                                             (() => {
                                                 const { main, meta } = splitMessageContent(msg.content);
@@ -414,6 +423,20 @@ export default function ChatPage() {
                         </div>
                     )}
                 </div>
+
+                {/* Retry banner when retryable error */}
+                {retryableError && (
+                    <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 px-4 py-2 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-lg">
+                        <span className="text-sm text-[var(--text-secondary)]">{retryableError.message}</span>
+                        <button
+                            type="button"
+                            onClick={handleRetry}
+                            className="px-3 py-1.5 rounded-lg bg-[var(--accent)] text-[var(--accent-fg)] text-sm font-medium hover:opacity-90 transition-opacity"
+                        >
+                            {t("chat_retry")}
+                        </button>
+                    </div>
+                )}
 
                 {/* Composer — floating at bottom */}
                 <div className="absolute bottom-0 left-0 right-0 p-3 pb-6 md:p-4 pointer-events-none">

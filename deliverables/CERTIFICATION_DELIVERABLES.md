@@ -127,7 +127,7 @@ See [README.md](../README.md#-architecture) for detailed technical diagrams of t
 
 ### RAG and Agent Components (Exactly)
 
-**RAG components:** (1) **Document store** — Romanian financial PDFs in `backend/documents/`, loaded via PyMuPDF. (2) **Chunking** — ParentDocumentRetriever with RecursiveCharacterTextSplitter (parent 2000 chars, child 400 chars). (3) **Embeddings** — OpenAI `text-embedding-3-small`. (4) **Vector store** — Qdrant; child chunks are embedded and stored there; parent chunks live in an in-memory docstore (persisted as `docstore.pkl`). (5) **Retrievers** — ParentDocumentRetriever (small-to-big), BM25Retriever (sparse), EnsembleRetriever (BM25 + vector, 0.2/0.8), CohereRerank (`rerank-multilingual-v3.0`, applied as a post-retrieval compression step). (6) **RAG tool** — The `rag_query` tool calls this pipeline and returns formatted context to the LLM.
+**RAG components:** (1) **Document store** — Romanian financial PDFs in `backend/documents/`, loaded via PyMuPDF. (2) **Chunking** — ParentDocumentRetriever with RecursiveCharacterTextSplitter (parent 2000 chars, child 400 chars). (3) **Embeddings** — OpenAI `text-embedding-3-small`. (4) **Vector store** — Qdrant; child chunks are embedded and stored there; parent chunks live in an in-memory docstore (persisted as `docstore.pkl`). (5) **Retrievers** — ParentDocumentRetriever (small-to-big), BM25Retriever (sparse), EnsembleRetriever (BM25 + vector, 0.2/0.8), CohereRerank (`rerank-v4.0-fast`, applied as a post-retrieval compression step). (6) **Multi-query retrieval** — Query expansion via GPT-4o-mini generates 2–3 formal/keyword-focused variants to improve recall for colloquial vs formal Romanian terminology. (7) **RAG tool** — The `rag_query` tool calls this pipeline and returns formatted context to the LLM.
 
 **Agent components:** (1) **Orchestrator** — LangGraph Supervisor (GPT-4o, `create_react_agent`), which decides which tools to call. (2) **Tools** — `rag_query` (document search), `market_search` (Tavily for rates/news), `goals_summary` (read user goals from PostgreSQL), `create_goal` (create savings goals), `savings_insights` (anonymized transaction analysis by category). (3) **Memory** — CoALA-style: short-term (AsyncPostgresSaver per thread), long-term (AsyncPostgresStore profile), semantic (AsyncPostgresStore knowledge); rolling summarization when history exceeds 100 messages. (4) **Routing** — The Supervisor inspects the user message and invokes one or more tools; results are passed back into the graph for the final answer.
 
@@ -264,7 +264,7 @@ We implemented **four** complementary retrieval improvements over the naive top-
 | **ParentDocumentRetriever** | Small-to-big retrieval: search on small chunks, return larger context | `langchain.retrievers.ParentDocumentRetriever` with child (400 chars) for search, parent (2000 chars) for context |
 | **BM25Retriever** | Sparse keyword matching for exact term hits (e.g., "TEZAUR", "MiFID II") | `langchain_community.retrievers.BM25Retriever` built from parent-split documents |
 | **EnsembleRetriever** | Combine dense (vector) and sparse (BM25) retrieval with weighted fusion | `langchain.retrievers.EnsembleRetriever` with weights `[0.2, 0.8]` (20% BM25, 80% vector) |
-| **CohereRerank** | Contextual compression: rerank top-K results to select the most relevant top-N | `langchain_cohere.CohereRerank` using `rerank-multilingual-v3.0`, top_n=12 (from top_k=20 candidates) |
+| **CohereRerank** | Contextual compression: rerank top-K results to select the most relevant top-N | `langchain_cohere.CohereRerank` using `rerank-v4.0-fast`, top_n=12 (from top_k=20 candidates) |
 
 **Rationale:** Each technique addresses a different retrieval weakness:
 - **ParentDocumentRetriever** solves the context fragmentation problem — small chunks match better but lose context.
@@ -306,13 +306,16 @@ I will use the Tier 3 pipeline (ParentDocumentRetriever + BM25 + EnsembleRetriev
 **Rationale:**
 1. The three-tier RAGAS evaluation on 17 questions (12 SDG + 5 manual) shows that **Tier 3 improves 3 of 4 metrics over the baseline**: faithfulness (+0.008), context precision (+0.05), and context recall (+0.03). The reranker effectively filters noise from the ensemble's candidates while the wider retrieval window (top_k=20 → top_n=12) preserves enough context for faithful, grounded answers.
 2. The hybrid ensemble (Tier 2) improves context recall (+0.04 over baseline) by combining BM25 keyword matching with vector similarity. Reranking (Tier 3) then refines these results for precision — the metric most directly tied to answer quality.
-3. Cohere's `rerank-multilingual-v3.0` cross-encoder is specifically designed for non-English content, making it ideal for our Romanian financial documents where cosine similarity alone misses nuanced relevance.
+3. Cohere's `rerank-v4.0-fast` cross-encoder is optimized for multilingual content and low latency, making it ideal for our Romanian financial documents where cosine similarity alone misses nuanced relevance.
 4. The only trade-off is answer relevancy (0.74 → 0.69). The reranker's more focused context window produces more precise but slightly narrower answers. For a financial assistant where factual accuracy and regulatory compliance matter more than broad coverage in a single response, this is acceptable — users can ask follow-up questions.
 5. The added latency (200–500ms for reranking) and cost ($0.001 per query) are negligible for a chat-based UX where users are already waiting for GPT-4o streaming.
 6. Agent evaluation confirms **100% tool routing accuracy and 100% MiFID II compliance** across all 6 scenarios, with an average answer quality of 4.3/5 (GPT-4.1 judge).
 
+**Implemented improvements** (beyond original Task 6):
+- **Multi-query retrieval** (AIE9 Session 11) — Query expansion via GPT-4o-mini generates 2–3 formal/keyword-focused phrasings per question to improve context recall, especially where colloquial Romanian queries miss chunks written in formal/legal terminology.
+- **Cohere Rerank v4** — Upgraded from `rerank-multilingual-v3.0` to `rerank-v4.0-fast` for improved ranking quality and multilingual support; works on Cohere free tier (10 req/min, 1000 calls/month).
+
 **Future improvements** (beyond Demo Day):
-- **Multi-query retrieval** (AIE9 Session 11) — generate multiple phrasings of the user's question to improve context recall, especially where colloquial Romanian queries miss chunks written in formal/legal terminology. This is a retrieval-time improvement that stacks on top of the existing Ensemble+Rerank pipeline without re-ingestion.
 - Fine-tuning ensemble weights (currently 0.2/0.8 BM25/vector) based on per-query-type analysis, and moving DocStore and BM25 to PostgreSQL for multi-worker scaling.
 
 ---
