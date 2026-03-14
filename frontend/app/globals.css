@@ -9,7 +9,7 @@
 
   --text-primary: #18181b;      /* zinc-900 */
   --text-secondary: #71717a;    /* zinc-500 */
-  --text-muted: #a1a1aa;        /* zinc-400 */
+  --text-muted: #71717a;        /* zinc-500 */
 
   --accent: #18181b;            /* zinc-900 */
   --accent-hover: #27272a;      /* zinc-800 */
@@ -37,8 +37,8 @@
   --bg-input: #27272a;          /* zinc-800 */
 
   --text-primary: #fafafa;      /* zinc-50 */
-  --text-secondary: #a1a1aa;    /* zinc-400 */
-  --text-muted: #71717a;        /* zinc-500 */
+  --text-secondary: #d4d4d8;    /* zinc-300 */
+  --text-muted: #a1a1aa;        /* zinc-400 */
 
   --accent: #ffffff;
   --accent-hover: #e4e4e7;
@@ -48,8 +48,8 @@
   --warning: #f59e0b;
   --danger: #ef4444;
 
-  --border: #27272a;            /* zinc-800 */
-  --border-light: #3f3f46;      /* zinc-700 */
+  --border: #3f3f46;            /* zinc-700 */
+  --border-light: #52525b;      /* zinc-600 */
 
   color-scheme: dark;
 }

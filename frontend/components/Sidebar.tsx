@@ -32,10 +32,10 @@ export default function Sidebar() {
                     <div className="flex items-center gap-3">
                         <Image src="/logo.png" alt="BaniWise Logo" width={40} height={40} className="rounded-xl shadow-sm" />
                         <div>
-                            <h1 className="text-sm font-semibold tracking-tight text-[var(--text-primary)]">
+                            <h1 className="text-base font-semibold tracking-tight text-[var(--text-primary)]">
                                 BaniWise
                             </h1>
-                            <p className="text-xs text-[var(--text-secondary)]">
+                            <p className="text-sm text-[var(--text-secondary)]">
                                 {t("app_subtitle")}
                             </p>
                         </div>
@@ -46,7 +46,7 @@ export default function Sidebar() {
                         <button
                             type="button"
                             onClick={toggleLanguage}
-                            className="px-2 py-1 rounded-lg text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)] transition-colors border border-[var(--border)]"
+                            className="px-2 py-1 rounded-lg text-sm font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)] transition-colors border border-[var(--border)]"
                             title={t("pref_language")}
                             aria-label={t("pref_language")}
                         >
@@ -80,7 +80,7 @@ export default function Sidebar() {
                             key={item.href}
                             href={item.href}
                             aria-current={isActive ? "page" : undefined}
-                            className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 group ${isActive
+                            className={`flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium transition-all duration-200 group ${isActive
                                 ? "bg-[var(--accent)] text-[var(--accent-fg)] shadow-sm"
                                 : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)]"
                                 }`}
@@ -105,12 +105,12 @@ export default function Sidebar() {
                             {user.name.charAt(0).toUpperCase()}
                         </div>
                         <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate text-[var(--text-primary)]">
+                            <p className="text-base font-medium truncate text-[var(--text-primary)]">
                                 {user.name}
                             </p>
                             <button
                                 onClick={logout}
-                                className="text-xs text-[var(--text-muted)] hover:text-[var(--danger)] transition-colors"
+                                className="text-sm text-[var(--text-muted)] hover:text-[var(--danger)] transition-colors"
                             >
                                 {t("logout")}
                             </button>

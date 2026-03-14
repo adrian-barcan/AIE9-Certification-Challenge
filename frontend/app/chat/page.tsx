@@ -288,7 +288,7 @@ export default function ChatPage() {
             {/* Sessions Sidebar */}
             <div className="w-64 border-r border-[var(--border)] bg-[var(--bg-card)] hidden lg:flex flex-col shrink-0 shadow-sm z-10">
                 <div className="p-5 border-b border-[var(--border)] flex justify-between items-center bg-[var(--bg-card)]">
-                    <h3 className="font-bold text-sm text-[var(--text-primary)] uppercase tracking-wider">{t("chat_history_title")}</h3>
+                    <h3 className="font-bold text-sm md:text-base text-[var(--text-primary)] uppercase tracking-wider">{t("chat_history_title")}</h3>
                     <button type="button" onClick={createNewSession} className="text-[var(--accent)] hover:bg-[var(--accent)]/10 p-2 rounded-xl transition-all border border-[var(--border)] shadow-sm bg-[var(--bg-card)] hover:scale-105" title={t("nav_chat")} aria-label={t("chat_history_title")}>
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -296,9 +296,9 @@ export default function ChatPage() {
                     </button>
                 </div>
                 <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                    {sessions.length === 0 && <div className="text-xs text-center p-4 text-[var(--text-muted)] font-medium">{t("chat_no_sessions")}</div>}
+                    {sessions.length === 0 && <div className="text-xs md:text-sm text-center p-4 text-[var(--text-muted)] font-medium">{t("chat_no_sessions")}</div>}
                     {sessions.map(s => (
-                        <div key={s.id} className={`w-full text-left rounded-2xl text-sm transition-all flex items-center group mb-1 ${currentSessionId === s.id ? "bg-[var(--accent)]/10 text-[var(--text-primary)] font-bold border border-[var(--accent)]/20 shadow-sm" : "text-[var(--text-secondary)] hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)] border border-transparent font-medium"}`}>
+                        <div key={s.id} className={`w-full text-left rounded-2xl text-sm md:text-base transition-all flex items-center group mb-1 ${currentSessionId === s.id ? "bg-[var(--accent)]/10 text-[var(--text-primary)] font-bold border border-[var(--accent)]/20 shadow-sm" : "text-[var(--text-secondary)] hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)] border border-transparent font-medium"}`}>
                             <button
                                 onClick={() => setCurrentSessionId(s.id)}
                                 className="flex-1 px-4 py-3 flex items-center gap-3 truncate"
@@ -327,29 +327,29 @@ export default function ChatPage() {
             {/* Main Chat Area */}
             <div className="flex-1 flex flex-col h-full relative">
                 {/* Messages area */}
-                <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-8">
+                <div className="flex-1 overflow-y-auto px-3 py-5 sm:px-8 sm:py-6">
                     {isLoadingHistory ? (
                         <div className="flex items-center justify-center h-full">
                             <span className="block w-6 h-6 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin" />
                         </div>
                     ) : messages.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full animate-fade-in max-w-2xl mx-auto text-center">
-                            <div className="mx-auto mb-8 flex items-center justify-center">
+                            <div className="mx-auto mb-6 sm:mb-8 flex items-center justify-center">
                                 <Image src="/chat_icon.png" alt="Chat BaniWise" width={80} height={80} className="rounded-3xl shadow-lg drop-shadow-sm opacity-90" />
                             </div>
-                            <h2 className="text-3xl font-bold mb-3 tracking-tight text-[var(--text-primary)]">
+                            <h2 className="text-3xl md:text-4xl font-bold mb-2 sm:mb-3 tracking-tight text-[var(--text-primary)]">
                                 {t("chat_greeting")}{user ? `, ${user.name}` : ""}!
                             </h2>
-                            <div className="text-[var(--text-secondary)] text-lg mb-12 leading-relaxed whitespace-pre-line font-medium">
+                            <div className="text-[var(--text-secondary)] text-lg md:text-xl mb-8 sm:mb-12 leading-relaxed whitespace-pre-line font-medium">
                                 {t("chat_intro")}
                             </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 w-full">
                                 {starterQuestions.map((q) => (
                                     <button
                                         key={q}
                                         onClick={() => handleStarterClick(q)}
-                                        className="p-5 text-sm font-medium text-left rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--accent)]/50 hover:shadow-md transition-all duration-300 group h-full flex flex-col hover:-translate-y-1"
+                                        className="p-4 sm:p-5 text-sm md:text-base font-medium text-left rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--accent)]/50 hover:shadow-md transition-all duration-300 group h-full flex flex-col hover:-translate-y-1"
                                     >
                                         <div className="mb-4 group-hover:scale-110 transition-transform duration-300 opacity-80 group-hover:opacity-100">
                                             <Image src="/lightning_icon.png" alt="Suggestion" width={28} height={28} className="rounded-lg shadow-sm" />
@@ -374,7 +374,7 @@ export default function ChatPage() {
                                         </div>
                                     )}
                                     <div
-                                        className={`max-w-[80%] px-5 py-3.5 rounded-3xl text-sm leading-relaxed shadow-sm ${msg.role === "user"
+                                        className={`max-w-[85%] md:max-w-[80%] px-4 md:px-5 py-3 md:py-3.5 rounded-3xl text-sm md:text-base leading-relaxed shadow-sm ${msg.role === "user"
                                             ? "bg-[var(--accent)] text-[var(--accent-fg)] rounded-tr-sm"
                                             : "bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border)] rounded-tl-sm"
                                             }`}
@@ -387,14 +387,14 @@ export default function ChatPage() {
                                             (() => {
                                                 const { main, meta } = splitMessageContent(msg.content);
                                                 return (
-                                                    <div className="prose dark:prose-invert prose-sm max-w-none break-words">
+                                                    <div className="prose dark:prose-invert prose-sm md:prose-base max-w-none break-words">
                                                         {main && (
                                                             <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                                                 {main}
                                                             </ReactMarkdown>
                                                         )}
                                                         {meta && (
-                                                            <div className="text-xs text-[var(--text-muted)] mt-3 pt-2 border-t border-[var(--border)]">
+                                                            <div className="text-xs md:text-sm text-[var(--text-muted)] mt-3 pt-2 border-t border-[var(--border)]">
                                                                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                                                     {meta}
                                                                 </ReactMarkdown>
@@ -404,7 +404,7 @@ export default function ChatPage() {
                                                 );
                                             })()
                                         ) : (
-                                            <div className="prose dark:prose-invert prose-sm max-w-none break-words">
+                                            <div className="prose dark:prose-invert prose-sm md:prose-base max-w-none break-words">
                                                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                                     {msg.content}
                                                 </ReactMarkdown>
@@ -426,12 +426,12 @@ export default function ChatPage() {
 
                 {/* Retry banner when retryable error */}
                 {retryableError && (
-                    <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 px-4 py-2 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-lg">
-                        <span className="text-sm text-[var(--text-secondary)]">{retryableError.message}</span>
+                    <div className="absolute bottom-20 left-3 right-3 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 z-20 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 px-4 py-2 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-lg sm:max-w-[90%]">
+                        <span className="text-sm md:text-base text-[var(--text-secondary)] break-words">{retryableError.message}</span>
                         <button
                             type="button"
                             onClick={handleRetry}
-                            className="px-3 py-1.5 rounded-lg bg-[var(--accent)] text-[var(--accent-fg)] text-sm font-medium hover:opacity-90 transition-opacity"
+                            className="px-3 py-1.5 rounded-lg bg-[var(--accent)] text-[var(--accent-fg)] text-sm md:text-base font-medium hover:opacity-90 transition-opacity self-end sm:self-auto"
                         >
                             {t("chat_retry")}
                         </button>
@@ -439,7 +439,7 @@ export default function ChatPage() {
                 )}
 
                 {/* Composer — floating at bottom */}
-                <div className="absolute bottom-0 left-0 right-0 p-3 pb-6 md:p-4 pointer-events-none">
+                    <div className="absolute bottom-0 left-0 right-0 p-2.5 pb-5 sm:p-3 sm:pb-6 md:p-4 pointer-events-none">
                     <div className="max-w-3xl mx-auto pointer-events-auto">
                         <div className="flex flex-col rounded-3xl border border-[var(--border)] bg-[var(--bg-card)] shadow-sm focus-within:border-[var(--accent)] focus-within:ring-2 focus-within:ring-[var(--accent)]/20 transition-all duration-200">
                             {/* Textarea */}
@@ -452,7 +452,7 @@ export default function ChatPage() {
                                     disabled={isStreaming}
                                     rows={1}
                                     aria-label={t("chat_input_placeholder")}
-                                    className="w-full resize-none bg-transparent text-sm outline-none placeholder:text-[var(--text-muted)] min-h-[24px] leading-6 text-[var(--text-primary)]"
+                                    className="w-full resize-none bg-transparent text-sm md:text-base outline-none placeholder:text-[var(--text-muted)] min-h-[24px] leading-6 text-[var(--text-primary)]"
                                     onKeyDown={(e) => {
                                         if (e.key === "Enter" && !e.shiftKey) {
                                             e.preventDefault();
@@ -490,7 +490,7 @@ export default function ChatPage() {
                             </div>
                         </div>
 
-                        <p className="text-center text-[11px] text-[var(--text-muted)] mt-2">
+                        <p className="text-center text-xs text-[var(--text-muted)] mt-2">
                             {t("chat_disclaimer")}
                         </p>
                     </div>

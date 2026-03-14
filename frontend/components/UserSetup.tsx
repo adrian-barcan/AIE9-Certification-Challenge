@@ -32,16 +32,16 @@ export default function UserSetup() {
 
     return (
         <div className="min-h-screen flex items-center justify-center p-4 bg-[var(--bg-primary)]">
-            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-3xl p-10 w-full max-w-md animate-fade-in text-center shadow-sm">
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-3xl p-6 sm:p-10 w-full max-w-md animate-fade-in text-center shadow-sm">
                 <div className="mx-auto mb-8 flex items-center justify-center">
                     <Image src="/logo.png" alt="BaniWise Logo" width={64} height={64} className="rounded-2xl shadow-sm" />
                 </div>
 
-                <h1 className="text-3xl font-bold mb-3 tracking-tight text-[var(--text-primary)]">
+                <h1 className="text-3xl sm:text-4xl font-bold mb-3 tracking-tight text-[var(--text-primary)]">
                     {t("welcome")}
                 </h1>
 
-                <div className="text-[var(--text-secondary)] text-base mb-10 leading-relaxed whitespace-pre-line">
+                <div className="text-[var(--text-secondary)] text-base sm:text-lg mb-10 leading-relaxed whitespace-pre-line">
                     {t("welcome_subtitle")}
                 </div>
 
@@ -52,12 +52,12 @@ export default function UserSetup() {
                         onChange={(e) => setName(e.target.value)}
                         placeholder={t("name_placeholder")}
                         autoFocus
-                        className="w-full px-5 py-4 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20 transition-all duration-200 text-lg text-center"
+                        className="w-full px-5 py-4 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20 transition-all duration-200 text-base sm:text-lg text-center"
                     />
 
                     <div className="space-y-4 text-left">
                         <div>
-                            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1 ml-1">{t("pref_language")}</label>
+                            <label className="block text-sm sm:text-base font-medium text-[var(--text-secondary)] mb-1 ml-1">{t("pref_language")}</label>
                             <select
                                 value={selectedLanguage}
                                 onChange={(e) => setSelectedLanguage(e.target.value as any)}
@@ -68,7 +68,7 @@ export default function UserSetup() {
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1 ml-1">{t("pref_risk")}</label>
+                            <label className="block text-sm sm:text-base font-medium text-[var(--text-secondary)] mb-1 ml-1">{t("pref_risk")}</label>
                             <select
                                 value={riskTolerance}
                                 onChange={(e) => setRiskTolerance(e.target.value)}
@@ -82,13 +82,13 @@ export default function UserSetup() {
                     </div>
 
                     {error && (
-                        <p className="text-[var(--danger)] text-sm animate-fade-in">{error}</p>
+                        <p className="text-[var(--danger)] text-sm sm:text-base animate-fade-in">{error}</p>
                     )}
 
                     <button
                         type="submit"
                         disabled={!name.trim() || loading}
-                        className="w-full py-4 rounded-xl bg-[var(--accent)] text-[var(--accent-fg)] font-medium text-lg shadow-sm hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                        className="w-full py-4 rounded-xl bg-[var(--accent)] text-[var(--accent-fg)] font-medium text-base sm:text-lg shadow-sm hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                     >
                         {loading ? (
                             <span className="flex items-center justify-center gap-2">

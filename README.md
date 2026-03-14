@@ -40,6 +40,7 @@ The `backend/notebooks/sdg_and_evaluation.ipynb` notebook contains a robust, pro
 End-to-end stack: Frontend → FastAPI → LangGraph Supervisor → Tools & CoALA Memory.
 
 ```mermaid
+%%{init: {'theme':'base', 'themeVariables': {'primaryColor':'#1e293b','primaryTextColor':'#ffffff','primaryBorderColor':'#0f172a','secondaryColor':'#334155','secondaryTextColor':'#ffffff','secondaryBorderColor':'#0f172a','tertiaryColor':'#475569','tertiaryTextColor':'#ffffff','tertiaryBorderColor':'#0f172a','lineColor':'#0f172a','fontSize':'18px','edgeLabelBackground':'#f8fafc','nodeBorder':'#0f172a','nodeTextColor':'#ffffff','clusterBkg':'#f1f5f9','clusterBorder':'#1e293b','titleColor':'#0f172a'}}}%%
 flowchart TB
     subgraph Client["🖥️ Client Layer"]
         FE[Next.js Frontend]
@@ -51,16 +52,16 @@ flowchart TB
         DocsAPI["/api/documents/ingest"]
         GoalsAPI["/api/goals"]
         TransactionsAPI["/api/transactions"]
-        FastAPI --> ChatAPI
-        FastAPI --> DocsAPI
-        FastAPI --> GoalsAPI
-        FastAPI --> TransactionsAPI
+        FastAPI -->|"1.1 Serve"| ChatAPI
+        FastAPI -->|"1.2 Serve"| DocsAPI
+        FastAPI -->|"1.3 Serve"| GoalsAPI
+        FastAPI -->|"1.4 Serve"| TransactionsAPI
     end
 
     subgraph Agent["🧠 AI Agent Layer"]
         Supervisor[LangGraph Supervisor<br/>GPT-4o]
         Tools[Specialist Tools]
-        Supervisor --> Tools
+        Supervisor -->|"3. Choose tool"| Tools
     end
 
     subgraph ToolsDetail[" "]
@@ -68,10 +69,10 @@ flowchart TB
         Market[market_search]
         GoalsTool[goals_summary<br/>create_goal]
         SavingsTool[savings_insights]
-        Tools --> RAG
-        Tools --> Market
-        Tools --> GoalsTool
-        Tools --> SavingsTool
+        Tools -->|"3.1 Docs query"| RAG
+        Tools -->|"3.2 Live data"| Market
+        Tools -->|"3.3 Goals ops"| GoalsTool
+        Tools -->|"3.4 Savings analysis"| SavingsTool
     end
 
     subgraph Memory["📦 CoALA Memory"]
@@ -89,21 +90,21 @@ flowchart TB
         PG[(PostgreSQL)]
     end
 
-    FE -->|HTTP/SSE| FastAPI
-    ChatAPI --> Supervisor
-    DocsAPI --> RAG
-    GoalsAPI --> PG
-    TransactionsAPI --> PG
-    TransactionsAPI -.->|optional| Ollama
+    FE -->|"1. HTTP/SSE"| FastAPI
+    ChatAPI -->|"2. Route chat"| Supervisor
+    DocsAPI -->|"4. Ingest/query docs"| RAG
+    GoalsAPI -->|"5. Goals read/write"| PG
+    TransactionsAPI -->|"6. Store transactions"| PG
+    TransactionsAPI -.->|"7. Optional categorization"| Ollama
 
-    Supervisor <-->|context & history| Memory
-    RAG --> Qdrant
-    RAG --> Cohere
-    RAG --> OpenAI
-    Market --> Tavily
-    GoalsTool --> PG
-    SavingsTool --> PG
-    Supervisor -->|completion| OpenAI
+    Supervisor <-->|"8. Context and history"| Memory
+    RAG -->|"9. Vector search"| Qdrant
+    RAG -->|"10. Rerank"| Cohere
+    RAG -->|"11. Embeddings"| OpenAI
+    Market -->|"12. Web lookup"| Tavily
+    GoalsTool -->|"13. Goal summaries"| PG
+    SavingsTool -->|"14. Spending aggregates"| PG
+    Supervisor -->|"15. Final completion"| OpenAI
 ```
 
 ### RAG Pipeline
@@ -111,6 +112,7 @@ flowchart TB
 Ingestion (PDF → Qdrant + BM25) and retrieval (Ensemble → Cohere Rerank).
 
 ```mermaid
+%%{init: {'theme':'base', 'themeVariables': {'primaryColor':'#1e293b','primaryTextColor':'#ffffff','primaryBorderColor':'#0f172a','secondaryColor':'#334155','secondaryTextColor':'#ffffff','secondaryBorderColor':'#0f172a','tertiaryColor':'#475569','tertiaryTextColor':'#ffffff','tertiaryBorderColor':'#0f172a','lineColor':'#0f172a','fontSize':'18px','edgeLabelBackground':'#f8fafc','nodeBorder':'#0f172a','nodeTextColor':'#ffffff','clusterBkg':'#f1f5f9','clusterBorder':'#1e293b','titleColor':'#0f172a'}}}%%
 flowchart LR
     subgraph Ingest["📥 Ingestion"]
         PDF[PDF Files]
@@ -121,17 +123,18 @@ flowchart LR
         QdrantW[(Qdrant<br/>Vectors)]
         DocStore[(DocStore<br/>Parents)]
         BM25Store[BM25 Index]
-        PDF --> Load
-        Load --> ParentSplit
-        ParentSplit --> ChildSplit
-        ChildSplit --> Embed
-        Embed --> QdrantW
-        ParentSplit --> DocStore
-        ParentSplit --> BM25Store
+        PDF -->|"1. Load files"| Load
+        Load -->|"2. Parent chunks"| ParentSplit
+        ParentSplit -->|"3. Child chunks"| ChildSplit
+        ChildSplit -->|"4. Embed chunks"| Embed
+        Embed -->|"5. Store vectors"| QdrantW
+        ParentSplit -->|"6. Store parents"| DocStore
+        ParentSplit -->|"7. Build sparse index"| BM25Store
     end
 ```
 
 ```mermaid
+%%{init: {'theme':'base', 'themeVariables': {'primaryColor':'#1e293b','primaryTextColor':'#ffffff','primaryBorderColor':'#0f172a','secondaryColor':'#334155','secondaryTextColor':'#ffffff','secondaryBorderColor':'#0f172a','tertiaryColor':'#475569','tertiaryTextColor':'#ffffff','tertiaryBorderColor':'#0f172a','lineColor':'#0f172a','fontSize':'18px','edgeLabelBackground':'#f8fafc','nodeBorder':'#0f172a','nodeTextColor':'#ffffff','clusterBkg':'#f1f5f9','clusterBorder':'#1e293b','titleColor':'#0f172a'}}}%%
 flowchart TB
     subgraph Query["🔍 Query Path"]
         Q[User Question]
@@ -142,13 +145,13 @@ flowchart TB
         Rerank[Cohere Rerank<br/>rerank-v4.0-fast]
         TopN[Top-N Chunks]
         Format[Formatted Context]
-        Q --> EmbQ
-        EmbQ --> VecRet
-        VecRet --> Ensemble
-        BM25 --> Ensemble
-        Ensemble -->|top_k candidates| Rerank
-        Rerank --> TopN
-        TopN --> Format
+        Q -->|"1. Embed request"| EmbQ
+        EmbQ -->|"2. Dense search"| VecRet
+        VecRet -->|"3. Candidate set A"| Ensemble
+        BM25 -->|"4. Candidate set B"| Ensemble
+        Ensemble -->|"5. top_k candidates"| Rerank
+        Rerank -->|"6. Select top_n"| TopN
+        TopN -->|"7. Build prompt context"| Format
     end
 
     subgraph Stores["Stores"]
@@ -157,9 +160,9 @@ flowchart TB
         BM25Idx[BM25]
     end
 
-    VecRet --> Qdrant
-    VecRet --> DocStore
-    BM25 --> BM25Idx
+    VecRet -->|"2.1 Vector lookup"| Qdrant
+    VecRet -->|"2.2 Parent fetch"| DocStore
+    BM25 -->|"4.1 Sparse lookup"| BM25Idx
 ```
 
 ### CoALA Memory
@@ -167,6 +170,7 @@ flowchart TB
 Short-term, long-term, semantic memory and rolling summarization.
 
 ```mermaid
+%%{init: {'theme':'base', 'themeVariables': {'primaryColor':'#1e293b','primaryTextColor':'#ffffff','primaryBorderColor':'#0f172a','secondaryColor':'#334155','secondaryTextColor':'#ffffff','secondaryBorderColor':'#0f172a','tertiaryColor':'#475569','tertiaryTextColor':'#ffffff','tertiaryBorderColor':'#0f172a','lineColor':'#0f172a','fontSize':'18px','edgeLabelBackground':'#f8fafc','nodeBorder':'#0f172a','nodeTextColor':'#ffffff','clusterBkg':'#f1f5f9','clusterBorder':'#1e293b','titleColor':'#0f172a'}}}%%
 flowchart TB
     subgraph UserRequest["Incoming Request"]
         Req[user_id + session_id<br/>+ message]
@@ -175,7 +179,7 @@ flowchart TB
     subgraph ShortTerm["📌 Short-Term (Working) Memory"]
         Thread[Conversation Thread]
         Checkpointer[AsyncPostgresSaver]
-        Thread -->|thread_id| Checkpointer
+        Thread -->|"2. Persist by thread_id"| Checkpointer
         Note1["Recent messages in context window"]
     end
 
@@ -183,21 +187,21 @@ flowchart TB
         Trim[Trim old messages]
         Summarize[MemoryService.summarize_messages<br/>GPT-4o-mini]
         SummaryKey["(user_id, summary, session_id)"]
-        Trim --> Summarize
-        Summarize --> SummaryKey
+        Trim -->|"4. Summarize overflow"| Summarize
+        Summarize -->|"5. Store summary"| SummaryKey
     end
 
     subgraph LongTerm["📚 Long-Term Memory"]
         ProfileNS["(user_id, profile)"]
         ProfileStore[AsyncPostgresStore]
-        ProfileNS --> ProfileStore
+        ProfileNS -->|"3. Load profile"| ProfileStore
         Note2["Persistent preferences"]
     end
 
     subgraph Semantic["🔬 Semantic Memory"]
         KnowledgeNS["(user_id, knowledge)"]
         KnowledgeStore[AsyncPostgresStore]
-        KnowledgeNS --> KnowledgeStore
+        KnowledgeNS -->|"3. Load knowledge"| KnowledgeStore
         Note3["Learned financial facts"]
     end
 
@@ -205,14 +209,14 @@ flowchart TB
         UserContext["USER CONTEXT: Conversation summary, User profile, Known financial context"]
     end
 
-    Req --> Thread
-    Req --> ProfileNS
-    Req --> KnowledgeNS
-    Checkpointer --> Trim
-    SummaryKey --> UserContext
-    ProfileStore --> UserContext
-    KnowledgeStore --> UserContext
-    UserContext --> Supervisor[Supervisor LLM]
+    Req -->|"1. Append message"| Thread
+    Req -->|"1.1 Identify user"| ProfileNS
+    Req -->|"1.2 Identify user"| KnowledgeNS
+    Checkpointer -->|"3.1 Threshold check"| Trim
+    SummaryKey -->|"6. Inject summary"| UserContext
+    ProfileStore -->|"6.1 Inject profile"| UserContext
+    KnowledgeStore -->|"6.2 Inject facts"| UserContext
+    UserContext -->|"7. Final prompt"| Supervisor[Supervisor LLM]
 ```
 
 ### Agent Tool Routing
@@ -220,35 +224,36 @@ flowchart TB
 Supervisor routing to `rag_query`, `market_search`, `goals_summary`, `create_goal`, `savings_insights`.
 
 ```mermaid
+%%{init: {'theme':'base', 'themeVariables': {'primaryColor':'#1e293b','primaryTextColor':'#ffffff','primaryBorderColor':'#0f172a','secondaryColor':'#334155','secondaryTextColor':'#ffffff','secondaryBorderColor':'#0f172a','tertiaryColor':'#475569','tertiaryTextColor':'#ffffff','tertiaryBorderColor':'#0f172a','lineColor':'#0f172a','fontSize':'18px','edgeLabelBackground':'#f8fafc','nodeBorder':'#0f172a','nodeTextColor':'#ffffff','clusterBkg':'#f1f5f9','clusterBorder':'#1e293b','titleColor':'#0f172a'}}}%%
 flowchart TB
     User[User Message]
     Sys[System Prompt<br/>+ User Context + MiFID II rules]
     Supervisor[Supervisor<br/>GPT-4o]
-    User --> Supervisor
-    Sys --> Supervisor
+    User -->|"1. Ask question"| Supervisor
+    Sys -->|"2. Inject rules"| Supervisor
 
-    Supervisor --> Decision{Tool choice}
+    Supervisor -->|"3. Decide route"| Decision{Tool choice}
 
-    Decision -->|Document/regulations<br/>HOW products work| RAG[rag_query]
-    Decision -->|Live data, news<br/>prices, EUR/RON| Market[market_search]
-    Decision -->|Goals, progress| GoalsSum[goals_summary]
-    Decision -->|Create new goal| CreateGoal[create_goal]
-    Decision -->|Savings, spending,<br/>where to save| Savings[savings_insights]
-    Decision -->|No tool / combine| Direct[Direct answer]
+    Decision -->|"4.1 Document and regulations"| RAG[rag_query]
+    Decision -->|"4.2 Live data and news"| Market[market_search]
+    Decision -->|"4.3 Goals and progress"| GoalsSum[goals_summary]
+    Decision -->|"4.4 Create goal"| CreateGoal[create_goal]
+    Decision -->|"4.5 Savings and spending"| Savings[savings_insights]
+    Decision -->|"4.6 No tool path"| Direct[Direct answer]
 
-    RAG --> RAGService[RAG Service<br/>Qdrant + Cohere]
-    Market --> Tavily[Tavily API]
-    GoalsSum --> GoalsService[Goals Service<br/>PostgreSQL]
-    CreateGoal --> GoalsService
-    Savings --> TxService[Transaction Service<br/>savings summary · PostgreSQL]
+    RAG -->|"5. Retrieve context"| RAGService[RAG Service<br/>Qdrant + Cohere]
+    Market -->|"5.1 Search web"| Tavily[Tavily API]
+    GoalsSum -->|"5.2 Fetch goals"| GoalsService[Goals Service<br/>PostgreSQL]
+    CreateGoal -->|"5.2 Create goal"| GoalsService
+    Savings -->|"5.3 Aggregate spending"| TxService[Transaction Service<br/>savings summary · PostgreSQL]
 
-    RAGService --> Context[Context to LLM]
-    Tavily --> Context
-    GoalsService --> Context
-    TxService --> Context
-    Context --> Supervisor
-    Direct --> Response[Streamed Response]
-    Supervisor --> Response
+    RAGService -->|"6. Return docs"| Context[Context to LLM]
+    Tavily -->|"6.1 Return live data"| Context
+    GoalsService -->|"6.2 Return goals"| Context
+    TxService -->|"6.3 Return insights"| Context
+    Context -->|"7. Compose answer"| Supervisor
+    Direct -->|"8. Respond directly"| Response[Streamed Response]
+    Supervisor -->|"9. Stream final answer"| Response
 ```
 
 ### Transaction import and categorization
@@ -256,11 +261,12 @@ flowchart TB
 Bank statement CSV upload (Transactions page) is parsed, categorized (Mistral via Ollama or rule-based fallback), anonymized, and stored in PostgreSQL. The agent uses `savings_insights` to summarize spending by category and suggest where to save.
 
 ```mermaid
+%%{init: {'theme':'base', 'themeVariables': {'primaryColor':'#1e293b','primaryTextColor':'#ffffff','primaryBorderColor':'#0f172a','secondaryColor':'#334155','secondaryTextColor':'#ffffff','secondaryBorderColor':'#0f172a','tertiaryColor':'#475569','tertiaryTextColor':'#ffffff','tertiaryBorderColor':'#0f172a','lineColor':'#0f172a','fontSize':'18px','edgeLabelBackground':'#f8fafc','nodeBorder':'#0f172a','nodeTextColor':'#ffffff','clusterBkg':'#f1f5f9','clusterBorder':'#1e293b','titleColor':'#0f172a'}}}%%
 flowchart LR
     subgraph Upload["📤 Upload"]
         CSV[CSV Bank Statement]
         Parser[Transaction Parser<br/>BRD · BCR · Raiffeisen · ING]
-        CSV --> Parser
+        CSV -->|"1. Upload statement"| Parser
     end
 
     subgraph Categorize["🏷️ Categorize"]
@@ -269,17 +275,19 @@ flowchart LR
         Rules[Rule-based fallback]
         Mistral[Mistral categories]
         RuleCats[Same category set]
-        Parser --> Check
-        Check -->|yes| OllamaSvc --> Mistral
-        Check -->|no| Rules --> RuleCats
+        Parser -->|"2. Parse rows"| Check
+        Check -->|"3a. yes"| OllamaSvc
+        OllamaSvc -->|"3a.1 Assign categories"| Mistral
+        Check -->|"3b. no"| Rules
+        Rules -->|"3b.1 Apply category rules"| RuleCats
     end
 
     subgraph Store["📦 Store"]
         Anon[Anonymizer]
         PG_TX[(PostgreSQL<br/>Transactions)]
-        Mistral --> Anon
-        RuleCats --> Anon
-        Anon --> PG_TX
+        Mistral -->|"4. Normalize output"| Anon
+        RuleCats -->|"4. Normalize output"| Anon
+        Anon -->|"5. Store anonymized data"| PG_TX
     end
 ```
 

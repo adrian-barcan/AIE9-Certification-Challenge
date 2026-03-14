@@ -65,7 +65,7 @@ class TransactionService:
             return source, 0, False
 
         # Categorize (Mistral or rule fallback; fail-fast if Ollama down)
-        items = [(p.description, p.amount) for p in parsed]
+        items = [(p.description, p.amount, p.type) for p in parsed]
         categories, used_ollama = await categorize_batch(items)
 
         # Description hashes for dedup/recurrence (then discard descriptions)

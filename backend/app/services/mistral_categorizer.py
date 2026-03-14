@@ -1,12 +1,11 @@
-"""Transaction categorization via Mistral (Ollama) with rule-based fallback.
+"""Transaction categorization via Mistral (Ollama) with rule-based fallback."""
 
-Sends only description (and optional amount) to local Ollama; returns category only.
-If Ollama is unavailable, falls back to keyword rules. No data leaves the server.
-"""
+from __future__ import annotations
 
 import logging
 import re
-from typing import Any
+from dataclasses import dataclass
+from typing import Literal
 
 import httpx
 
@@ -14,8 +13,8 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Fee types are more detailed; anything ending with _FEE is a fee subcategory
-CATEGORIES = [
+# Fee types are more detailed; anything ending with _FEE is a fee subcategory.
+CATEGORIES: list[str] = [
     "SUBSCRIPTION",
     "GROCERIES",
     "DINING",
@@ -33,6 +32,11 @@ CATEGORIES = [
     "LOAN_INTEREST_FEE",
     "FOREIGN_EXCHANGE_FEE",
     "OTHER_FEE",
+    "SALARY_INCOME",
+    "OTHER_INCOME",
+    "INVESTMENT",
+    "INTERNAL_TRANSFER",
+    "PERSONAL_TRANSFER",
     "UTILITIES",
     "ELECTRONICS_SHOPPING",
     "CLOTHING_SHOPPING",
@@ -47,239 +51,264 @@ CATEGORIES = [
     "OTHER_HEALTH",
     "OTHER",
 ]
-
+CATEGORIES_SET = set(CATEGORIES)
 CATEGORIES_STR = ", ".join(CATEGORIES)
 
-OLLAMA_PROMPT = f"""Return only one word from this exact list: {CATEGORIES_STR}.
-Transaction description: {{description}}
-Amount: {{amount}}
+PROMPT_CONTEXT = """Context for Romanian bank exports:
+- "Cumparare POS" means card purchase; use merchant clues from "Tranzactie la".
+- "Transfer Home'Bank" is a money transfer, not automatically a fee.
+- "Incasare" means incoming transfer/income.
+- Transfers between own accounts should be INTERNAL_TRANSFER.
+- Transfer fees should be TRANSFER_FEE only when wording indicates a fee/commission."""
+
+OLLAMA_PROMPT_TEMPLATE = """Return only one category from this exact list: {categories}.
+{context}
+Transaction description: {description}
+Amount: {amount}
+Transaction type: {tx_type}
 Reply with only the single category word, nothing else."""
 
-# Rule-based fallback: keyword (lowercase) -> category
-RULE_KEYWORDS: dict[str, str] = {
-    "netflix": "SUBSCRIPTION",
-    "spotify": "SUBSCRIPTION",
-    "youtube": "SUBSCRIPTION",
-    "abonament stb": "PUBLIC_TRANSPORT",
-    "abonament ratb": "PUBLIC_TRANSPORT",
-    "abonament": "SUBSCRIPTION",
-    "subscription": "SUBSCRIPTION",
-    "kaufland": "GROCERIES",
-    "lidl": "GROCERIES",
-    "carrefour": "GROCERIES",
-    "mega image": "GROCERIES",
-    "penny": "GROCERIES",
-    "groceries": "GROCERIES",
-    "restaurant": "DINING",
-    "mcdonald": "DINING",
-    "kfc": "DINING",
-    "pizza": "DINING",
-    "food": "DINING",
-    "dining": "DINING",
-    # Transport subcategories (most specific first)
-    "petrom": "FUEL_TRANSPORT",
-    "omv": "FUEL_TRANSPORT",
-    "mobil": "FUEL_TRANSPORT",
-    "shell": "FUEL_TRANSPORT",
-    "molnar": "FUEL_TRANSPORT",
-    "rompetrol": "FUEL_TRANSPORT",
-    "benzina": "FUEL_TRANSPORT",
-    "fuel": "FUEL_TRANSPORT",
-    "gas station": "FUEL_TRANSPORT",
-    "stb": "PUBLIC_TRANSPORT",
-    "ratb": "PUBLIC_TRANSPORT",
-    "metro": "PUBLIC_TRANSPORT",
-    "tramvai": "PUBLIC_TRANSPORT",
-    "tram": "PUBLIC_TRANSPORT",
-    "autobuz": "PUBLIC_TRANSPORT",
-    "bus ": "PUBLIC_TRANSPORT",
-    "cfr": "PUBLIC_TRANSPORT",
-    "train": "PUBLIC_TRANSPORT",
-    "tren": "PUBLIC_TRANSPORT",
-    "uber": "TAXI_AND_RIDESHARE",
-    "bolt": "TAXI_AND_RIDESHARE",
-    "taxi": "TAXI_AND_RIDESHARE",
-    "ride": "TAXI_AND_RIDESHARE",
-    "parcare": "PARKING_AND_TOLLS",
-    "parking": "PARKING_AND_TOLLS",
-    "rovinieta": "PARKING_AND_TOLLS",
-    "toll": "PARKING_AND_TOLLS",
-    "vignette": "PARKING_AND_TOLLS",
-    "service auto": "CAR_MAINTENANCE",
-    "reparatii auto": "CAR_MAINTENANCE",
-    "anvelope": "CAR_MAINTENANCE",
-    "tires": "CAR_MAINTENANCE",
-    "mechanic": "CAR_MAINTENANCE",
-    "transport": "OTHER_TRANSPORT",
-    # Fee subcategories (most specific first so they match before generic)
-    "retragere atm": "ATM_FEE",
-    "atm fee": "ATM_FEE",
-    "atm": "ATM_FEE",
-    "cash withdrawal": "ATM_FEE",
-    "transfer": "TRANSFER_FEE",
-    "comision transfer": "TRANSFER_FEE",
-    "transfer fee": "TRANSFER_FEE",
-    "card": "CARD_FEE",
-    "emisie card": "CARD_FEE",
-    "administrare card": "CARD_FEE",
-    "descoperit": "OVERDRAFT_FEE",
-    "overdraft": "OVERDRAFT_FEE",
-    "dobanda": "LOAN_INTEREST_FEE",
-    "interest": "LOAN_INTEREST_FEE",
-    "dobanda credit": "LOAN_INTEREST_FEE",
-    "schimb valutar": "FOREIGN_EXCHANGE_FEE",
-    "curs valutar": "FOREIGN_EXCHANGE_FEE",
-    "fx": "FOREIGN_EXCHANGE_FEE",
-    "cont administrare": "ACCOUNT_MAINTENANCE_FEE",
-    "account fee": "ACCOUNT_MAINTENANCE_FEE",
-    "maintenance fee": "ACCOUNT_MAINTENANCE_FEE",
-    "comision": "OTHER_FEE",
-    "commission": "OTHER_FEE",
-    "taxa": "OTHER_FEE",
-    "fee": "OTHER_FEE",
-    "brd": "ACCOUNT_MAINTENANCE_FEE",
-    "bcr": "ACCOUNT_MAINTENANCE_FEE",
-    "raiffeisen": "ACCOUNT_MAINTENANCE_FEE",
-    "banca": "ACCOUNT_MAINTENANCE_FEE",
-    "electric": "UTILITIES",
-    "gaz": "UTILITIES",
-    "apa": "UTILITIES",
-    "enel": "UTILITIES",
-    "e-on": "UTILITIES",
-    "utilities": "UTILITIES",
-    # Shopping subcategories (most specific first)
-    "emag": "ELECTRONICS_SHOPPING",
-    "altex": "ELECTRONICS_SHOPPING",
-    "mediagalaxy": "ELECTRONICS_SHOPPING",
-    "cel": "ELECTRONICS_SHOPPING",
-    "laptop": "ELECTRONICS_SHOPPING",
-    "telefon": "ELECTRONICS_SHOPPING",
-    "phone": "ELECTRONICS_SHOPPING",
-    "tv": "ELECTRONICS_SHOPPING",
-    "electronics": "ELECTRONICS_SHOPPING",
-    "zara": "CLOTHING_SHOPPING",
-    "h&m": "CLOTHING_SHOPPING",
-    "h.m": "CLOTHING_SHOPPING",
-    "c&a": "CLOTHING_SHOPPING",
-    "decathlon": "CLOTHING_SHOPPING",
-    "fashion": "CLOTHING_SHOPPING",
-    "clothing": "CLOTHING_SHOPPING",
-    "haine": "CLOTHING_SHOPPING",
-    "incaltaminte": "CLOTHING_SHOPPING",
-    "ikea": "HOME_GARDEN_SHOPPING",
-    "dedeman": "HOME_GARDEN_SHOPPING",
-    "jumbo": "HOME_GARDEN_SHOPPING",
-    "leroy merlin": "HOME_GARDEN_SHOPPING",
-    "mobila": "HOME_GARDEN_SHOPPING",
-    "furniture": "HOME_GARDEN_SHOPPING",
-    "dm ": "BEAUTY_AND_PERSONAL_CARE",  # dm with space to avoid matching random letters
-    "sephora": "BEAUTY_AND_PERSONAL_CARE",
-    "cosmetice": "BEAUTY_AND_PERSONAL_CARE",
-    "beauty": "BEAUTY_AND_PERSONAL_CARE",
-    "shopping": "OTHER_SHOPPING",
-    # Health subcategories (most specific first)
-    "farmacie": "PHARMACY_HEALTH",
-    "pharmacy": "PHARMACY_HEALTH",
-    "medicamente": "PHARMACY_HEALTH",
-    "catena": "PHARMACY_HEALTH",
-    "sensiblu": "PHARMACY_HEALTH",
-    "doctor": "DOCTOR_AND_CLINIC",
-    "medic": "DOCTOR_AND_CLINIC",
-    "clinica": "DOCTOR_AND_CLINIC",
-    "spital": "DOCTOR_AND_CLINIC",
-    "hospital": "DOCTOR_AND_CLINIC",
-    "analize": "DOCTOR_AND_CLINIC",
-    "dentist": "DENTAL_HEALTH",
-    "stomatologie": "DENTAL_HEALTH",
-    "dental": "DENTAL_HEALTH",
-    "dentar": "DENTAL_HEALTH",
-    "optician": "OPTICS_HEALTH",
-    "ochelari": "OPTICS_HEALTH",
-    "lentile": "OPTICS_HEALTH",
-    "lenses": "OPTICS_HEALTH",
-    "asigurare medicala": "HEALTH_INSURANCE",
-    "health insurance": "HEALTH_INSURANCE",
-    "cas": "HEALTH_INSURANCE",
-    "health": "OTHER_HEALTH",
-}
+RuleMode = Literal["contains", "prefix", "regex"]
 
 
-def _rule_based_category(description: str, amount: float) -> str:
-    """Classify using keyword rules only."""
-    text = (description or "").lower()
-    for keyword, category in RULE_KEYWORDS.items():
-        if keyword in text:
-            return category
-    # Negative small amounts often bank/fee charges
-    if amount < 0 and abs(amount) < 50:
+@dataclass(frozen=True, slots=True)
+class TransactionSignal:
+    description: str
+    amount: float
+    tx_type: str | None = None
+
+    @property
+    def normalized_text(self) -> str:
+        return normalize_text(self.description)
+
+    @property
+    def inferred_type(self) -> str:
+        return (self.tx_type or ("credit" if self.amount >= 0 else "debit")).lower()
+
+
+@dataclass(frozen=True, slots=True)
+class KeywordRule:
+    pattern: str
+    category: str
+    priority: int
+    mode: RuleMode = "contains"
+
+
+def normalize_text(value: str) -> str:
+    return " ".join((value or "").lower().split())
+
+
+def _build_rules(category: str, patterns: tuple[str, ...], start_priority: int) -> list[KeywordRule]:
+    return [
+        KeywordRule(pattern=p, category=category, priority=start_priority - idx)
+        for idx, p in enumerate(patterns)
+    ]
+
+
+RULE_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("SUBSCRIPTION", ("netflix", "spotify", "youtube", "orange", "yoxo", "digi", "vodafone", "abonament", "subscription")),
+    ("PUBLIC_TRANSPORT", ("abonament stb", "abonament ratb", "stb", "ratb", "metro", "tramvai", "tram", "autobuz", "bus ", "cfr", "train", "tren")),
+    ("GROCERIES", ("kaufland", "lidl", "carrefour", "mega image", "penny", "groceries")),
+    ("DINING", ("restaurant", "mcdonald", "kfc", "pizza", "wolt", "tazz", "glovo", "cafe", "cafelier", "bistro", "food", "dining")),
+    ("FUEL_TRANSPORT", ("petrom", "omv", "mobil", "shell", "molnar", "rompetrol", "benzina", "fuel", "gas station")),
+    ("TAXI_AND_RIDESHARE", ("uber", "bolt", "taxi", "ride")),
+    ("PARKING_AND_TOLLS", ("parcare", "parking", "amparcat", "e-parking", "rovinieta", "toll", "vignette")),
+    ("CAR_MAINTENANCE", ("service auto", "reparatii auto", "anvelope", "tires", "mechanic", "auto spa", "spalatorie")),
+    ("OTHER_TRANSPORT", ("transport",)),
+    ("ATM_FEE", ("retragere atm", "atm fee", "atm", "cash withdrawal")),
+    ("TRANSFER_FEE", ("comision transfer", "transfer fee")),
+    ("CARD_FEE", ("emisie card", "administrare card", "card")),
+    ("OVERDRAFT_FEE", ("descoperit", "overdraft")),
+    ("LOAN_INTEREST_FEE", ("dobanda credit", "dobanda", "interest")),
+    ("FOREIGN_EXCHANGE_FEE", ("schimb valutar", "curs valutar", "fx")),
+    ("ACCOUNT_MAINTENANCE_FEE", ("cont administrare", "account fee", "maintenance fee", "brd", "bcr", "raiffeisen", "banca")),
+    ("OTHER_FEE", ("comision", "commission", "taxa", "fee")),
+    ("UTILITIES", ("electric", "gaz", "apa", "enel", "e-on", "utilities")),
+    ("ELECTRONICS_SHOPPING", ("emag", "altex", "mediagalaxy", "cel", "laptop", "telefon", "phone", "tv", "electronics")),
+    ("CLOTHING_SHOPPING", ("zara", "h&m", "h.m", "c&a", "decathlon", "fashion", "clothing", "haine", "incaltaminte")),
+    ("HOME_GARDEN_SHOPPING", ("ikea", "dedeman", "jumbo", "leroy merlin", "mobila", "furniture")),
+    ("BEAUTY_AND_PERSONAL_CARE", ("dm ", "sephora", "cosmetice", "beauty")),
+    ("OTHER_SHOPPING", ("shopping",)),
+    ("PHARMACY_HEALTH", ("farmacie", "pharmacy", "dona", "medicamente", "catena", "sensiblu")),
+    ("DOCTOR_AND_CLINIC", ("doctor", "medic", "clinica", "spital", "hospital", "analize")),
+    ("DENTAL_HEALTH", ("dentist", "stomatologie", "dental", "dentar")),
+    ("OPTICS_HEALTH", ("optician", "ochelari", "lentile", "lenses")),
+    ("HEALTH_INSURANCE", ("asigurare medicala", "health insurance", "cas")),
+    ("SALARY_INCOME", ("salariu", "salary")),
+    ("INVESTMENT", ("tradeville", "alimentare bvb", "retragere d8ds", "fond", "broker", "invest", "brk")),
+    ("OTHER_HEALTH", ("health",)),
+)
+
+
+def _compile_rules() -> tuple[KeywordRule, ...]:
+    rules: list[KeywordRule] = []
+    priority = 10_000
+    for category, patterns in RULE_GROUPS:
+        built = _build_rules(category=category, patterns=patterns, start_priority=priority)
+        rules.extend(built)
+        priority -= 100
+    return tuple(sorted(rules, key=lambda r: r.priority, reverse=True))
+
+
+KEYWORD_RULES: tuple[KeywordRule, ...] = _compile_rules()
+
+
+def apply_high_priority_transfer_income_rules(signal: TransactionSignal) -> str | None:
+    text = signal.normalized_text
+    tx_type = signal.inferred_type
+
+    if (
+        "incasare" in text
+        and tx_type == "credit"
+        and ("plata catre alta banca" in text or "ordonator:" in text or "din contul:" in text)
+    ):
+        if "tradeville" in text or "bvb" in text or "invest" in text:
+            return "INVESTMENT"
+        if "salariu" in text or "salary" in text:
+            return "SALARY_INCOME"
+        return "INTERNAL_TRANSFER"
+
+    if "transfer home'bank" in text and tx_type == "debit":
+        if "tradeville" in text or "bvb" in text or "invest" in text:
+            return "INVESTMENT"
+        return "PERSONAL_TRANSFER"
+
+    return None
+
+
+def _rule_matches(rule: KeywordRule, text: str) -> bool:
+    if rule.mode == "prefix":
+        return text.startswith(rule.pattern)
+    if rule.mode == "regex":
+        return re.search(rule.pattern, text) is not None
+    return rule.pattern in text
+
+
+def match_keyword_rules(text: str) -> str | None:
+    for rule in KEYWORD_RULES:
+        if _rule_matches(rule, text):
+            return rule.category
+    return None
+
+
+def fallback_category_for_unmatched(signal: TransactionSignal) -> str:
+    if signal.inferred_type == "credit":
+        return "OTHER_INCOME"
+    if signal.amount < 0 and abs(signal.amount) < 50:
         return "OTHER_FEE"
     return "OTHER"
 
 
-async def _ollama_categorize(description: str, amount: float) -> str | None:
-    """Call Ollama to get one category. Returns None on failure."""
-    url = f"{settings.ollama_base_url.rstrip('/')}/api/generate"
-    prompt = OLLAMA_PROMPT.format(description=description[:500], amount=amount)
-    payload = {
-        "model": settings.mistral_model,
-        "prompt": prompt,
-        "stream": False,
-    }
-    try:
-        # First request can take 60s+ while Ollama loads the model; use 120s timeout
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            r = await client.post(url, json=payload)
-            r.raise_for_status()
-            data = r.json()
-            response = (data.get("response") or "").strip().upper()
-            for cat in CATEGORIES:
-                if cat in response or response == cat:
-                    return cat
-            # Take first word that matches a category
-            words = re.split(r"\s+", response)
-            for w in words:
-                if w in CATEGORIES:
-                    return w
-            return "OTHER"
-    except Exception as e:
-        logger.warning("Ollama categorization failed: %s", e)
-        return None
+def build_prompt(signal: TransactionSignal) -> str:
+    return OLLAMA_PROMPT_TEMPLATE.format(
+        categories=CATEGORIES_STR,
+        context=PROMPT_CONTEXT,
+        description=signal.description[:500],
+        amount=signal.amount,
+        tx_type=signal.inferred_type,
+    )
+
+
+def parse_ollama_category(raw_response: str) -> str:
+    response = (raw_response or "").strip().upper()
+    for category in CATEGORIES:
+        if category in response or response == category:
+            return category
+    for word in re.split(r"\s+", response):
+        if word in CATEGORIES_SET:
+            return word
+    return "OTHER"
+
+
+class RuleCategorizer:
+    def categorize(self, signal: TransactionSignal) -> str:
+        high_priority_category = apply_high_priority_transfer_income_rules(signal)
+        if high_priority_category is not None:
+            return high_priority_category
+        keyword_category = match_keyword_rules(signal.normalized_text)
+        if keyword_category is not None:
+            return keyword_category
+        return fallback_category_for_unmatched(signal)
+
+
+class OllamaCategorizer:
+    def __init__(self, timeout_seconds: float = 120.0) -> None:
+        self.timeout_seconds = timeout_seconds
+
+    async def categorize(self, signal: TransactionSignal) -> str | None:
+        url = f"{settings.ollama_base_url.rstrip('/')}/api/generate"
+        payload = {
+            "model": settings.mistral_model,
+            "prompt": build_prompt(signal),
+            "stream": False,
+        }
+        try:
+            # First request can take 60s+ while Ollama loads the model.
+            async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+                response = await client.post(url, json=payload)
+                response.raise_for_status()
+                data = response.json()
+                return parse_ollama_category(data.get("response") or "")
+        except Exception as e:
+            logger.warning("Ollama categorization failed: %s", e)
+            return None
+
+
+class CategorizerOrchestrator:
+    def __init__(self) -> None:
+        self.rule_categorizer = RuleCategorizer()
+        self.ollama_categorizer = OllamaCategorizer()
+
+    async def categorize_transaction(self, signal: TransactionSignal, *, use_ollama: bool = True) -> tuple[str, bool]:
+        if use_ollama:
+            category = await self.ollama_categorizer.categorize(signal)
+            if category is not None:
+                return category, True
+        return self.rule_categorizer.categorize(signal), False
+
+    async def categorize_batch(self, signals: list[TransactionSignal]) -> tuple[list[str], bool]:
+        if not signals:
+            return [], False
+
+        first_category, ollama_ok = await self.categorize_transaction(signals[0], use_ollama=True)
+        if not ollama_ok:
+            logger.info(
+                "Ollama unavailable or failed for first transaction; using rule-based categorization for all %d items",
+                len(signals),
+            )
+            categories = [first_category]
+            categories.extend(self.rule_categorizer.categorize(signal) for signal in signals[1:])
+            return categories, False
+
+        logger.info("Ollama connected; categorizing %d transactions with Mistral", len(signals))
+        categories = [first_category]
+        for signal in signals[1:]:
+            category, _ = await self.categorize_transaction(signal, use_ollama=True)
+            categories.append(category)
+        return categories, True
+
+
+_ORCHESTRATOR = CategorizerOrchestrator()
+
+
+def _to_signal(description: str, amount: float, tx_type: str | None) -> TransactionSignal:
+    return TransactionSignal(description=description or "", amount=amount, tx_type=tx_type)
 
 
 async def categorize_transaction(
-    description: str, amount: float = 0.0, *, use_ollama: bool = True
+    description: str,
+    amount: float = 0.0,
+    tx_type: str | None = None,
+    *,
+    use_ollama: bool = True,
 ) -> tuple[str, bool]:
-    """Return (category, used_ollama). If use_ollama and Ollama fails, returns rule-based and used_ollama=False."""
-    if use_ollama:
-        cat = await _ollama_categorize(description, amount)
-        if cat is not None:
-            return cat, True
-    return _rule_based_category(description, amount), False
+    """Return (category, used_ollama)."""
+    return await _ORCHESTRATOR.categorize_transaction(
+        _to_signal(description, amount, tx_type), use_ollama=use_ollama
+    )
 
 
-async def categorize_batch(
-    items: list[tuple[str, float]],
-) -> tuple[list[str], bool]:
-    """Categorize multiple transactions. Tries Ollama on first item; if it fails, uses rules for entire batch.
-    Returns (categories, used_ollama).
-    """
-    if not items:
-        return [], False
-    # Try Ollama on first transaction only (fail-fast)
-    first_desc, first_amount = items[0]
-    first_cat, ollama_ok = await categorize_transaction(first_desc, first_amount, use_ollama=True)
-    if not ollama_ok:
-        logger.info(
-            "Ollama unavailable or failed for first transaction; using rule-based categorization for all %d items",
-            len(items),
-        )
-        results = [first_cat]
-        for desc, amount in items[1:]:
-            results.append(_rule_based_category(desc, amount))
-        return results, False
-    logger.info("Ollama connected; categorizing %d transactions with Mistral", len(items))
-    results = [first_cat]
-    for desc, amount in items[1:]:
-        cat, _ = await categorize_transaction(desc, amount, use_ollama=True)
-        results.append(cat)
-    return results, True
+async def categorize_batch(items: list[tuple[str, float, str | None]]) -> tuple[list[str], bool]:
+    """Categorize multiple transactions with Ollama fail-fast and rule fallback."""
+    signals = [_to_signal(description, amount, tx_type) for description, amount, tx_type in items]
+    return await _ORCHESTRATOR.categorize_batch(signals)

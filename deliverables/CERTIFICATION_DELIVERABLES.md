@@ -54,14 +54,14 @@ High-level view of the system in three layers: what the user sees, where the log
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': {
-  'primaryColor':'#fff', 'primaryTextColor':'#0f172a', 'primaryBorderColor':'#1e293b',
-  'secondaryColor':'#f8fafc', 'secondaryTextColor':'#0f172a', 'secondaryBorderColor':'#1e293b',
-  'tertiaryColor':'#f1f5f9', 'tertiaryTextColor':'#0f172a', 'tertiaryBorderColor':'#1e293b',
+  'primaryColor':'#1e293b', 'primaryTextColor':'#ffffff', 'primaryBorderColor':'#0f172a',
+  'secondaryColor':'#334155', 'secondaryTextColor':'#ffffff', 'secondaryBorderColor':'#0f172a',
+  'tertiaryColor':'#475569', 'tertiaryTextColor':'#ffffff', 'tertiaryBorderColor':'#0f172a',
   'lineColor':'#1e293b', 'secondaryLineColor':'#1e293b',
   'background':'#ffffff', 'mainBkg':'#ffffff', 'secondBkg':'#f8fafc', 'tertiaryBkg':'#f1f5f9',
   'clusterBkg':'#f8fafc', 'clusterBorder':'#1e293b', 'titleColor':'#0f172a',
-  'edgeLabelBackground':'#ffffff', 'nodeBorder':'#1e293b', 'nodeTextColor':'#0f172a',
-  'fontSize':'16px'
+  'edgeLabelBackground':'#ffffff', 'nodeBorder':'#0f172a', 'nodeTextColor':'#ffffff',
+  'fontSize':'18px'
 }}}%%
 flowchart LR
     subgraph Presentation ["Presentation layer"]
@@ -89,21 +89,21 @@ flowchart LR
         Ollama["Ollama<br/>Mistral"]
     end
 
-    WebApp --> Backend
-    Backend --> Agent
-    Agent --> Docs
-    Agent --> Market
-    Agent --> Goals
-    Agent --> Transactions
-    Docs --> Qdrant
-    Docs --> Cohere
-    Docs --> OpenAI
-    Market --> Tavily
-    Goals --> Postgres
-    Transactions --> Postgres
-    Transactions -.-> Ollama
-    Agent --> OpenAI
-    Agent --> Postgres
+    WebApp -->|"1. User request"| Backend
+    Backend -->|"2. Route to AI"| Agent
+    Agent -->|"3.1 Docs retrieval"| Docs
+    Agent -->|"3.2 Live market data"| Market
+    Agent -->|"3.3 Goals actions"| Goals
+    Agent -->|"3.4 Spending analysis"| Transactions
+    Docs -->|"4.1 Vector search"| Qdrant
+    Docs -->|"4.2 Rerank context"| Cohere
+    Docs -->|"4.3 Embeddings/LLM"| OpenAI
+    Market -->|"4.4 Search API"| Tavily
+    Goals -->|"4.5 Persist goals"| Postgres
+    Transactions -->|"4.6 Persist transactions"| Postgres
+    Transactions -.->|"4.7 Optional categorization"| Ollama
+    Agent -->|"5. Final completion"| OpenAI
+    Agent -->|"6. Memory + user data"| Postgres
 
     linkStyle 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 stroke:#1e293b,stroke-width:2px
 ```

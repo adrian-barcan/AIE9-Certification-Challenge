@@ -20,6 +20,7 @@ export default function TransactionsPage() {
     const { t } = useLanguage();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [bankLabel, setBankLabel] = useState("");
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [result, setResult] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
@@ -52,6 +53,7 @@ export default function TransactionsPage() {
             );
             setError(null);
             setBankLabel("");
+            setSelectedFile(null);
             if (fileInputRef.current) fileInputRef.current.value = "";
             queryClient.invalidateQueries({ queryKey: ["transaction-sources", user?.id] });
             queryClient.invalidateQueries({ queryKey: ["transactions", user?.id] });
@@ -75,9 +77,20 @@ export default function TransactionsPage() {
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
+        setSelectedFile(file);
         setResult(null);
         setError(null);
-        ingestMutation.mutate({ file, label: bankLabel });
+    };
+
+    const handleImportClick = () => {
+        if (!selectedFile) {
+            setError("Please select a CSV file first.");
+            setResult(null);
+            return;
+        }
+        setResult(null);
+        setError(null);
+        ingestMutation.mutate({ file: selectedFile, label: bankLabel });
     };
 
     useEffect(() => {
@@ -93,22 +106,25 @@ export default function TransactionsPage() {
     }
 
     return (
-        <div className="p-6 max-w-4xl mx-auto">
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold text-[var(--text-primary)]">
+        <div className="p-4 sm:p-6 max-w-4xl mx-auto">
+            <div className="mb-5 sm:mb-6">
+                <h1 className="text-2xl md:text-3xl font-bold text-[var(--text-primary)]">
                     {t("tx_title")}
                 </h1>
-                <p className="text-sm text-[var(--text-secondary)] mt-1">
+                <p className="text-sm md:text-base text-[var(--text-secondary)] mt-1">
                     {t("tx_subtitle")}
                 </p>
             </div>
 
             {/* Upload */}
-            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-6 mb-6 shadow-sm">
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-5 sm:p-6 mb-6 shadow-sm">
                 <div className="flex flex-col gap-4">
-                    <div className="flex flex-wrap items-end gap-3">
+                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm md:text-base text-amber-700 dark:text-amber-300">
+                        Disclaimer: only ING CSV transaction export format is supported for import at the moment.
+                    </div>
+                    <div className="flex flex-wrap items-end gap-2.5 sm:gap-3">
                         <label className="flex flex-col gap-1">
-                            <span className="text-sm font-medium text-[var(--text-primary)]">
+                            <span className="text-sm md:text-base font-medium text-[var(--text-primary)]">
                                 {t("tx_upload")}
                             </span>
                             <input
@@ -117,11 +133,11 @@ export default function TransactionsPage() {
                                 accept=".csv"
                                 onChange={handleFileChange}
                                 disabled={ingestMutation.isPending}
-                                className="text-sm text-[var(--text-primary)] file:mr-3 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-[var(--accent)] file:text-[var(--accent-fg)] file:font-bold"
+                                className="text-sm md:text-base text-[var(--text-primary)] file:mr-3 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-[var(--accent)] file:text-[var(--accent-fg)] file:font-bold"
                             />
                         </label>
                         <label className="flex flex-col gap-1">
-                            <span className="text-sm font-medium text-[var(--text-secondary)]">
+                            <span className="text-sm md:text-base font-medium text-[var(--text-secondary)]">
                                 {t("tx_bank_label")}
                             </span>
                             <input
@@ -129,22 +145,35 @@ export default function TransactionsPage() {
                                 value={bankLabel}
                                 onChange={(e) => setBankLabel(e.target.value)}
                                 placeholder="Ex: BRD Current"
-                                className="px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--bg-input)] text-sm text-[var(--text-primary)] w-40"
+                                className="px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--bg-input)] text-sm md:text-base text-[var(--text-primary)] w-full sm:w-40"
                             />
                         </label>
+                        <button
+                            type="button"
+                            onClick={handleImportClick}
+                            disabled={ingestMutation.isPending || !selectedFile}
+                            className="px-4 py-2 rounded-full border-0 bg-[var(--accent)] text-[var(--accent-fg)] text-sm md:text-base font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {ingestMutation.isPending ? t("tx_upload_processing") : "Import CSV"}
+                        </button>
                     </div>
+                    {selectedFile && !ingestMutation.isPending && (
+                        <p className="text-sm md:text-base text-[var(--text-secondary)]">
+                            Selected file: {selectedFile.name}
+                        </p>
+                    )}
                     {ingestMutation.isPending && (
-                        <p className="text-sm text-[var(--text-secondary)] flex items-center gap-2">
+                        <p className="text-sm md:text-base text-[var(--text-secondary)] flex items-center gap-2">
                             <span className="animate-spin">⏳</span> {t("tx_upload_processing")}
                         </p>
                     )}
                     {result && (
-                        <div className="p-3 rounded-xl bg-green-500/10 border border-green-500/20 text-sm text-green-600 dark:text-green-400">
+                        <div className="p-3 rounded-xl bg-green-500/10 border border-green-500/20 text-sm md:text-base text-green-600 dark:text-green-400">
                             {result}
                         </div>
                     )}
                     {error && (
-                        <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-sm text-red-600 dark:text-red-400">
+                        <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-sm md:text-base text-red-600 dark:text-red-400">
                             ⚠️ {error}
                         </div>
                     )}
@@ -152,30 +181,30 @@ export default function TransactionsPage() {
             </div>
 
             {/* CTA to Chat */}
-            <div className="mb-6">
+            <div className="mb-5 sm:mb-6">
                 <Link
                     href="/chat?q=Unde%20pot%20economisi?"
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--accent)] text-[var(--accent-fg)] text-sm font-bold hover:opacity-90 transition-opacity"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--accent)] text-[var(--accent-fg)] text-sm md:text-base font-bold hover:opacity-90 transition-opacity"
                 >
                     💡 {t("tx_ask_savings")}
                 </Link>
             </div>
 
             {/* Sources */}
-            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-6 shadow-sm mb-6">
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-5 sm:p-6 shadow-sm mb-6">
                 <h3 className="font-bold text-base mb-4 text-[var(--text-primary)]">
                     {t("tx_sources")}
                 </h3>
                 {loadingSources ? (
-                    <p className="text-sm text-[var(--text-muted)] animate-pulse">{t("tx_loading")}</p>
+                    <p className="text-sm md:text-base text-[var(--text-muted)] animate-pulse">{t("tx_loading")}</p>
                 ) : sources.length === 0 ? (
-                    <p className="text-sm text-[var(--text-muted)]">{t("tx_no_sources")}</p>
+                    <p className="text-sm md:text-base text-[var(--text-muted)]">{t("tx_no_sources")}</p>
                 ) : (
                     <ul className="space-y-2">
                         {sources.map((src: TransactionSourceResponse) => (
                             <li
                                 key={src.id}
-                                className={`flex items-center justify-between p-3 rounded-xl border transition-colors ${
+                                className={`flex items-center justify-between p-2.5 sm:p-3 rounded-xl border transition-colors ${
                                     selectedSourceId === src.id
                                         ? "border-[var(--accent)] bg-[var(--accent)]/5"
                                         : "border-[var(--border)] bg-[var(--bg-input)] hover:border-[var(--accent)]/30"
@@ -193,7 +222,7 @@ export default function TransactionsPage() {
                                     <span className="font-medium text-[var(--text-primary)]">
                                         {src.bank_label || "Import"}
                                     </span>
-                                    <span className="ml-2 text-sm text-[var(--text-secondary)]">
+                                    <span className="ml-2 text-sm md:text-base text-[var(--text-secondary)]">
                                         {src.transaction_count ?? 0} {t("tx_transactions").toLowerCase()} ·{" "}
                                         {new Date(src.imported_at).toLocaleDateString()}
                                     </span>
@@ -204,7 +233,7 @@ export default function TransactionsPage() {
                                         if (confirm(t("goals_delete_confirm")))
                                             deleteMutation.mutate(src.id);
                                     }}
-                                    className="text-xs text-[var(--text-muted)] hover:text-red-500 px-2"
+                                    className="text-sm text-[var(--text-muted)] hover:text-red-500 px-2"
                                 >
                                     {t("tx_delete_source")}
                                 </button>
@@ -215,32 +244,38 @@ export default function TransactionsPage() {
             </div>
 
             {/* Transaction list */}
-            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-6 shadow-sm">
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-5 sm:p-6 shadow-sm">
                 <h3 className="font-bold text-base mb-4 text-[var(--text-primary)]">
                     {t("tx_transactions")}
                     {selectedSourceId ? ` (${t("tx_filtered")})` : ""}
                 </h3>
                 {loadingTx ? (
-                    <p className="text-sm text-[var(--text-muted)] animate-pulse">{t("tx_loading")}</p>
+                    <p className="text-sm md:text-base text-[var(--text-muted)] animate-pulse">{t("tx_loading")}</p>
                 ) : transactions.length === 0 ? (
-                    <p className="text-sm text-[var(--text-muted)]">
+                    <p className="text-sm md:text-base text-[var(--text-muted)]">
                         {selectedSourceId ? t("tx_empty_filtered") : t("tx_empty_upload")}
                     </p>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
+                        <table className="w-full text-sm md:text-base table-auto">
+                            <colgroup>
+                                <col className="w-[130px]" />
+                                <col className="w-[170px]" />
+                                <col />
+                                <col className="w-[110px]" />
+                            </colgroup>
                             <thead>
                                 <tr className="border-b border-[var(--border)]">
-                                    <th className="text-left py-2 font-medium text-[var(--text-secondary)]">
+                                    <th className="text-left py-2 px-3 font-medium text-[var(--text-secondary)]">
                                         {t("tx_date")}
                                     </th>
-                                    <th className="text-right py-2 font-medium text-[var(--text-secondary)]">
+                                    <th className="text-right py-2 px-3 font-medium text-[var(--text-secondary)]">
                                         {t("tx_amount")}
                                     </th>
-                                    <th className="text-left py-2 font-medium text-[var(--text-secondary)]">
+                                    <th className="text-left py-2 px-3 font-medium text-[var(--text-secondary)]">
                                         {t("tx_category")}
                                     </th>
-                                    <th className="text-center py-2 font-medium text-[var(--text-secondary)]">
+                                    <th className="text-center py-2 px-3 font-medium text-[var(--text-secondary)]">
                                         {t("tx_recurring")}
                                     </th>
                                 </tr>
@@ -251,11 +286,11 @@ export default function TransactionsPage() {
                                         key={tx.id}
                                         className="border-b border-[var(--border)]/50 hover:bg-[var(--bg-input)]/50"
                                     >
-                                        <td className="py-2 text-[var(--text-primary)]">
+                                        <td className="py-2 px-3 text-[var(--text-primary)] whitespace-nowrap">
                                             {new Date(tx.date).toLocaleDateString()}
                                         </td>
                                         <td
-                                            className={`py-2 text-right font-medium ${
+                                            className={`py-2 px-3 text-right font-medium whitespace-nowrap tabular-nums ${
                                                 tx.amount < 0
                                                     ? "text-red-500 dark:text-red-400"
                                                     : "text-green-600 dark:text-green-400"
@@ -264,10 +299,10 @@ export default function TransactionsPage() {
                                             {tx.amount >= 0 ? "+" : ""}
                                             {tx.amount.toFixed(2)} {tx.currency}
                                         </td>
-                                        <td className="py-2 text-[var(--text-primary)]">
+                                        <td className="py-2 px-3 text-[var(--text-primary)] break-words">
                                             {tx.category}
                                         </td>
-                                        <td className="py-2 text-center">
+                                        <td className="py-2 px-3 text-center">
                                             {tx.is_recurring ? "✓" : "—"}
                                         </td>
                                     </tr>
