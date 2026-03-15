@@ -37,7 +37,7 @@ async def _get_session_or_404(session_id: str, user_id: uuid.UUID, db: AsyncSess
     return session
 
 
-@router.post("/")
+@router.post("")
 async def chat(
     data: ChatRequest,
     db: AsyncSession = Depends(get_db),

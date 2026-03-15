@@ -106,7 +106,7 @@ async def list_sources(
     return out
 
 
-@router.get("/", response_model=List[TransactionResponse])
+@router.get("", response_model=List[TransactionResponse])
 async def list_transactions(
     source_id: Optional[uuid.UUID] = None,
     from_date: Optional[datetime] = None,

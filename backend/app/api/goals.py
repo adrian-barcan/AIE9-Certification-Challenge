@@ -30,7 +30,7 @@ async def _get_goal_for_user(goal_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSe
     return goal
 
 
-@router.get("/", response_model=List[GoalResponse])
+@router.get("", response_model=List[GoalResponse])
 async def list_goals(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -49,7 +49,7 @@ async def list_goals(
     return list(result.scalars().all())
 
 
-@router.post("/", response_model=GoalResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=GoalResponse, status_code=status.HTTP_201_CREATED)
 async def create_goal(
     data: GoalCreate,
     db: AsyncSession = Depends(get_db),

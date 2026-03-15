@@ -38,7 +38,7 @@ async def ingest_documents(_: User = Depends(get_current_user)) -> IngestRespons
         raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
 
 
-@router.get("/", response_model=list[DocumentInfo])
+@router.get("", response_model=list[DocumentInfo])
 async def list_documents() -> list[DocumentInfo]:
     """List indexed documents with collection info.
 
