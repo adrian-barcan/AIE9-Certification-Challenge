@@ -65,6 +65,10 @@ class Settings(BaseSettings):
 
     # === Memory Configuration ===
     chat_history_limit: int = Field(default=100, description="Number of recent messages to keep active in memory before summarizing")
+    chat_max_concurrent_requests: int = Field(
+        default=2,
+        description="Maximum concurrent chat requests handled by backend process to avoid LLM rate-limit spikes",
+    )
 
     # === Documents ===
     documents_path: str = Field(default="/app/documents", description="Path to financial PDFs")

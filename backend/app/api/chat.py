@@ -6,6 +6,7 @@ Supports streaming responses via Server-Sent Events (SSE).
 
 import json
 import logging
+import asyncio
 import uuid
 import traceback
 
@@ -15,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
+from app.config import settings
 from app.database import get_db
 from app.models.chat import ChatSession
 from app.models.user import User
@@ -24,6 +26,7 @@ from app.services.agent_service import agent_service
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
+chat_request_semaphore = asyncio.Semaphore(settings.chat_max_concurrent_requests)
 
 
 async def _get_session_or_404(session_id: str, user_id: uuid.UUID, db: AsyncSession) -> ChatSession:
@@ -59,16 +62,17 @@ async def chat(
     async def event_stream():
         """Generate SSE events from agent response (tokens and status placeholders)."""
         try:
-            async for item in agent_service.stream(
-                message=data.message,
-                user_id=str(user.id),
-                session_id=data.session_id,
-            ):
-                # item is either {"token": str} or {"status": str}
-                if isinstance(item, dict):
-                    yield f"data: {json.dumps(item)}\n\n"
-                else:
-                    yield f"data: {json.dumps({'token': item})}\n\n"
+            async with chat_request_semaphore:
+                async for item in agent_service.stream(
+                    message=data.message,
+                    user_id=str(user.id),
+                    session_id=data.session_id,
+                ):
+                    # item is either {"token": str} or {"status": str}
+                    if isinstance(item, dict):
+                        yield f"data: {json.dumps(item)}\n\n"
+                    else:
+                        yield f"data: {json.dumps({'token': item})}\n\n"
             yield f"data: {json.dumps({'done': True})}\n\n"
         except Exception as e:
             logger.error(f"Chat stream error: {e}")
@@ -78,6 +82,10 @@ async def chat(
                 x in err_msg
                 for x in ["timeout", "connection", "503", "unavailable", "temporarily", "network"]
             )
+            if not retryable:
+                retryable = any(
+                    x in err_msg for x in ["429", "rate limit", "too many requests"]
+                )
             yield f"data: {json.dumps({'error': str(e), 'retryable': retryable})}\n\n"
 
     return StreamingResponse(
@@ -111,11 +119,12 @@ async def chat_sync(
     """
     try:
         await _get_session_or_404(data.session_id, user.id, db)
-        response = await agent_service.chat(
-            message=data.message,
-            user_id=str(user.id),
-            session_id=data.session_id,
-        )
+        async with chat_request_semaphore:
+            response = await agent_service.chat(
+                message=data.message,
+                user_id=str(user.id),
+                session_id=data.session_id,
+            )
         return {"response": response}
     except Exception as e:
         logger.exception("Chat sync error: %s", e)
