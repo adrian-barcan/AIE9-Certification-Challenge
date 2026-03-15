@@ -3,6 +3,10 @@
     {
       "source": "/backend/:path*",
       "destination": "https://aie9-certification-challenge-production.up.railway.app/:path*"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "https://aie9-certification-challenge-production.up.railway.app/api/:path*"
     }
   ]
 }

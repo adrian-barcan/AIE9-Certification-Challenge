@@ -162,7 +162,7 @@ export async function sendMessageStream(
     onToken: (token: string) => void,
     onStatus?: (message: string) => void
 ): Promise<string> {
-    const res = await fetch(`${API_BASE}/api/chat/`, {
+    const res = await fetch(`${API_BASE}/api/chat`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -287,13 +287,13 @@ export async function deleteChatSession(sessionId: string): Promise<void> {
 // ─── Goals ───────────────────────────────────────────────────────
 
 export async function listGoals(): Promise<Goal[]> {
-    return apiFetch<Goal[]>(`/api/goals/`);
+    return apiFetch<Goal[]>(`/api/goals`);
 }
 
 export async function createGoal(
     data: GoalCreate
 ): Promise<Goal> {
-    return apiFetch<Goal>(`/api/goals/`, {
+    return apiFetch<Goal>(`/api/goals`, {
         method: "POST",
         body: JSON.stringify(data),
     });
@@ -340,7 +340,7 @@ export async function ingestDocuments(): Promise<{
 }
 
 export async function listDocuments(): Promise<DocumentInfo[]> {
-    return apiFetch<DocumentInfo[]>("/api/documents/");
+    return apiFetch<DocumentInfo[]>("/api/documents");
 }
 
 // ─── Transactions ─────────────────────────────────────────────────
