@@ -37,7 +37,7 @@ def _set_session_cookie(response: Response, session_id: str) -> None:
         value=session_id,
         httponly=True,
         secure=settings.auth_cookie_secure,
-        samesite="lax",
+        samesite=settings.auth_cookie_samesite_normalized,
         max_age=max_age,
         expires=max_age,
         path="/",
@@ -157,7 +157,12 @@ async def logout(
         if session:
             await db.delete(session)
             await db.commit()
-    response.delete_cookie(SESSION_COOKIE_NAME, path="/")
+    response.delete_cookie(
+        SESSION_COOKIE_NAME,
+        path="/",
+        secure=settings.auth_cookie_secure,
+        samesite=settings.auth_cookie_samesite_normalized,
+    )
     return {"status": "logged_out"}
 
 

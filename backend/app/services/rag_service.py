@@ -70,10 +70,18 @@ class RAGService:
             chunk_size=settings.rag_child_chunk_size,
             chunk_overlap=settings.rag_child_chunk_overlap,
         )
-        self._qdrant_client = QdrantClient(
-            host=settings.qdrant_host,
-            port=settings.qdrant_port,
-        )
+        qdrant_api_key = settings.qdrant_api_key.strip() or None
+        if settings.qdrant_url.strip():
+            self._qdrant_client = QdrantClient(
+                url=settings.qdrant_url.strip(),
+                api_key=qdrant_api_key,
+            )
+        else:
+            self._qdrant_client = QdrantClient(
+                host=settings.qdrant_host,
+                port=settings.qdrant_port,
+                api_key=qdrant_api_key,
+            )
         
         self.vector_store: Optional[QdrantVectorStore] = None
         self.docstore = InMemoryStore()

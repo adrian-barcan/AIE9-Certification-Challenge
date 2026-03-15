@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     )
 
     # === Qdrant ===
+    qdrant_url: str = Field(default="", description="Optional full Qdrant URL, e.g. https://...:6333")
+    qdrant_api_key: str = Field(default="", description="Optional API key for managed Qdrant")
     qdrant_host: str = Field(default="qdrant")
     qdrant_port: int = Field(default=6333)
     qdrant_collection: str = Field(default="financial_docs_ro")
@@ -76,6 +78,10 @@ class Settings(BaseSettings):
 
     # === Auth / Session / CORS ===
     auth_cookie_secure: bool = Field(default=False, description="Use Secure flag for session cookie (enable in production HTTPS)")
+    auth_cookie_samesite: str = Field(
+        default="lax",
+        description="SameSite policy for session cookie: lax, strict, or none",
+    )
     auth_max_sessions_per_user: int = Field(default=5, description="Maximum number of active sessions per user")
     auth_session_cleanup_interval_seconds: int = Field(default=900, description="How often to cleanup expired sessions")
     cors_origins: str = Field(
@@ -95,6 +101,17 @@ class Settings(BaseSettings):
             except json.JSONDecodeError:
                 pass
         return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+    @property
+    def auth_cookie_samesite_normalized(self) -> str:
+        """Return a valid SameSite value, with safe fallback for local HTTP."""
+        value = self.auth_cookie_samesite.strip().lower()
+        if value not in {"lax", "strict", "none"}:
+            value = "lax"
+        # Browsers reject SameSite=None cookies unless Secure=true.
+        if value == "none" and not self.auth_cookie_secure:
+            return "lax"
+        return value
 
     model_config = {
         "env_file": ".env",
