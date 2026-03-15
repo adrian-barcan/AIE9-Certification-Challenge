@@ -369,6 +369,99 @@ docker compose exec backend jupyter notebook \
 #    POST http://localhost:8000/api/documents/ingest  (or use the Documents tab in the UI)
 ```
 
+## Cloud Deployment (Qdrant Cloud + Railway + Vercel)
+
+This is the recommended deployment for this project:
+
+- **Backend + PostgreSQL** on Railway
+- **Vector DB** on Qdrant Cloud
+- **Frontend** on Vercel
+
+### 1) Create required services
+
+- Railway project with:
+  - one backend service (from this repo, `backend` root)
+  - one PostgreSQL service/plugin
+- Qdrant Cloud cluster
+- Vercel project for `frontend`
+
+### 2) Railway backend configuration
+
+Deploy the backend service from the `backend` directory and ensure the app is publicly reachable.
+
+Important:
+- Attach a public Railway domain to the backend service.
+- Set the public domain target port to the same port the app listens on (`8000`) **or** run the app on `$PORT`.
+
+Suggested start command (Railway):
+
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port $PORT
+```
+
+Set these backend environment variables in Railway:
+
+```bash
+OPENAI_API_KEY=...
+COHERE_API_KEY=...
+TAVILY_API_KEY=...
+
+DATABASE_URL=postgresql+asyncpg://${{Postgres.PGUSER}}:${{Postgres.PGPASSWORD}}@${{Postgres.PGHOST}}:${{Postgres.PGPORT}}/${{Postgres.PGDATABASE}}
+
+QDRANT_URL=https://<your-qdrant-endpoint>
+QDRANT_API_KEY=<your-qdrant-api-key>
+QDRANT_COLLECTION=financial_docs_ro
+
+AUTH_COOKIE_SECURE=true
+AUTH_COOKIE_SAMESITE=none
+CORS_ORIGINS=https://<your-vercel-domain>
+
+ANONYMIZATION_SALT=<long-random-secret>
+```
+
+Notes:
+- `DATABASE_URL` must include `+asyncpg`.
+- If `DATABASE_URL` is incomplete, startup may fail with `InvalidPasswordError` or user `root` auth errors.
+
+### 3) Vercel frontend configuration
+
+Create a Vercel project with:
+- **Root Directory**: `frontend`
+- Framework preset: Next.js
+
+Set frontend env var in Vercel:
+
+```bash
+NEXT_PUBLIC_API_BASE_URL=/backend
+```
+
+The project includes `frontend/vercel.json` rewrites so frontend calls proxy to Railway:
+- `/backend/:path*` -> Railway backend
+- `/api/:path*` -> Railway `/api/:path*` (fallback for redirected API paths)
+
+This proxy approach avoids cross-site cookie problems without needing a custom domain.
+
+### 4) Deploy order
+
+1. Deploy Railway backend + Postgres and confirm health:
+   - `GET https://<railway-backend-domain>/health` -> `200`
+2. Deploy Vercel frontend.
+3. Update `CORS_ORIGINS` in Railway to your final Vercel URL.
+4. Re-deploy backend after env updates.
+5. In the app, register/login and validate protected endpoints.
+
+### 5) Troubleshooting
+
+- **502 from Railway domain**
+  - Usually a port mismatch between Railway domain target port and app listening port.
+- **401 after successful login on Vercel**
+  - If using direct cross-site API calls, browser third-party cookie policy may block session cookies.
+  - Prefer the `/backend` Vercel proxy setup in this README.
+- **Qdrant 404 on collection**
+  - Collection not created yet; run document ingestion (`/api/documents/ingest`).
+- **307/308 redirects on API routes**
+  - Ensure frontend uses canonical API paths and backend is updated to avoid trailing-slash redirect dependencies.
+
 ### Optional: Ollama + Mistral
 
 To use **Mistral** for transaction categorization (Transactions → upload CSV):

@@ -16,6 +16,7 @@ Usage:
 """
 
 import logging
+import re
 import uuid
 from datetime import datetime
 from typing import Any, AsyncGenerator, Union
@@ -48,21 +49,78 @@ from app.services.memory_service import memory_service
 logger = logging.getLogger(__name__)
 
 
-def _detect_response_language(message: str) -> str:
-    """Detect if user message is in English or Romanian. Returns 'en' or 'ro'."""
+def _normalize_language(value: str | None) -> str:
+    """Normalize a language value into 'en' or 'ro'."""
+    if value and value.lower().startswith("en"):
+        return "en"
+    return "ro"
+
+
+def _detect_response_language(message: str) -> str | None:
+    """Best-effort language detection for user input. Returns 'en', 'ro', or None if unclear."""
     if not message or len(message.strip()) < 2:
+        return None
+
+    text = message.strip().lower()
+    # Keep only words to avoid punctuation bias and quoted/tool-like fragments.
+    words = re.findall(r"[a-zA-ZăâîșțĂÂÎȘȚ]+", text)
+    if not words:
+        return None
+
+    ro_diacritics = set("ăâîșțĂÂÎȘȚ")
+    ro_diacritic_hits = sum(1 for w in words if any(c in ro_diacritics for c in w))
+
+    # High-signal stopwords. Keep short lists to reduce false positives.
+    en_markers = {
+        "the",
+        "is",
+        "are",
+        "what",
+        "how",
+        "why",
+        "when",
+        "where",
+        "which",
+        "can",
+        "does",
+        "do",
+        "difference",
+        "between",
+    }
+    ro_markers = {
+        "ce",
+        "cum",
+        "care",
+        "unde",
+        "cand",
+        "când",
+        "pentru",
+        "este",
+        "sunt",
+        "din",
+        "cu",
+        "la",
+        "si",
+        "și",
+        "diferentele",
+        "diferențele",
+        "intre",
+        "între",
+    }
+
+    en_hits = sum(1 for w in words if w in en_markers)
+    ro_hits = sum(1 for w in words if w in ro_markers)
+
+    # Romanian diacritics are strong evidence.
+    if ro_diacritic_hits >= 1 and ro_hits >= en_hits:
         return "ro"
-    t = message.strip().lower()
-    # Romanian diacritics → Romanian
-    if any(c in t for c in "ăâîșț"):
+
+    score = en_hits - ro_hits
+    if score >= 2:
+        return "en"
+    if score <= -2:
         return "ro"
-    # Common English words (high signal for short messages)
-    en_markers = ("is ", " are ", " what ", " how ", " why ", " when ", " where ", " which ", " can ", " does ", " do ", " the ", " a ", " an ", " good ", " bad ", " invest", " tool", "?")
-    en_count = sum(1 for m in en_markers if m in t)
-    # Common Romanian words
-    ro_markers = (" ce ", " cum ", " care ", " unde ", " când ", " pentru ", " este ", " sunt ", " din ", " cu ", " la ", " în ")
-    ro_count = sum(1 for m in ro_markers if m in t)
-    return "en" if en_count >= ro_count else "ro"
+    return None
 
 
 async def _get_user_language(user_id: str) -> str:
@@ -94,6 +152,7 @@ Your name is BaniWise. You help users with:
 CRITICAL LANGUAGE RULE (MUST OBEY):
 {response_language}
 - The documents/tools return Romanian text. You MUST translate and respond in the user's language. Never respond in Romanian when the user wrote in English.
+- Keep output language consistent in the final answer. If the user message contains mixed-language snippets, still answer in the chosen output language and do not echo foreign-language fragments unless explicitly asked to quote/translate them.
 
 OTHER RULES:
 - When discussing investment products, ALWAYS add a MiFID II disclaimer at the end. Translate this disclaimer to match the user's language.
@@ -487,7 +546,9 @@ class AgentService:
         """
         user_context = await self._get_user_context(user_id, session_id)
         current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        lang = _detect_response_language(message)
+        preferred_lang = _normalize_language(await _get_user_language(user_id))
+        detected_lang = _detect_response_language(message)
+        lang = detected_lang or preferred_lang
         response_lang_instruction = (
             "- You MUST respond ENTIRELY in ENGLISH. Translate all Romanian content from tools into English. Use 'Sources:' for the references list."
             if lang == "en"
