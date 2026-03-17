@@ -18,13 +18,15 @@
 
 ## Slide 2: Problem (1.5 min)
 
-> "Let's start with the problem.
+> "Let's talk about the problem.
 >
-> Financial information is hard to use. It's spread across MFinante, ASF, BVB, and long PDF documents.
+> First -- financial literacy in Romania is very low. We are one of the lowest in Europe. A person who wants to invest has to read hundred-page PDFs just to understand basic products like TEZAUR.
 >
-> A user asking *'What is TEZAUR and is it right for me?'* has to search multiple websites, compare products, and understand rules alone.
+> Second -- information is everywhere. TEZAUR details are on one website, FIDELIS on another, tax rules in the Fiscal Code. There is no single place that brings it all together.
 >
-> Existing tools are either generic or too limited. They do not combine Romanian financial knowledge, user goals, and private spending insights in one place."
+> Third -- there is no personal guidance. Generic AI tools can give you general answers, but they do not know the details of current TEZAUR rates, they cannot track your goals, and they cannot safely analyze your bank statements. And most people do not feel comfortable uploading their spending data to a cloud AI.
+>
+> The result? People leave their money in low-interest bank deposits because finding better options feels too hard."
 
 **→ Click Next**
 
@@ -49,17 +51,17 @@
 
 ## Slide 4: Audience (1.5 min)
 
-> "We focus on three users.
+> "I focus on three types of users.
 >
-> **First-time investors** who need simple answers about products like TEZAUR and FIDELIS.
+> **First-time investors**. People who heard about government bonds, ETFs, or mutual funds but do not know which option is right for them.
 >
-> **Goal-oriented savers** who want to track progress and get advice based on their situation.
+> **Goal-oriented savers**. People who want to track their savings and get advice based on their real situation.
 >
-> **Privacy-conscious users** who want AI support without exposing raw transaction data.
+> **Privacy-conscious users**. People who want AI help but do not want to share their bank data with the cloud.
 >
-> BaniWise is built to support all three in one flow.
+> BaniWise supports all three in one app.
 >
-> Business focus: start with Romanian retail users, then expand through bank, broker, and financial educator partnerships."
+> For business, the idea is to start with Romanian retail users, then grow through banks, brokers, and financial education partners."
 
 **→ Click Next**
 
@@ -67,13 +69,15 @@
 
 ## Slide 5: Solution (1.5 min)
 
-> "BaniWise uses one supervisor agent that chooses the right tool for each question.
+> "BaniWise uses one supervisor agent that picks the right tool for each question.
 >
-> If the user asks about Romanian financial products, it uses document retrieval.
-> If the user asks for live rates, it uses market search.
-> If the user asks about planning, it uses goals and savings tools.
+> If you ask about a financial product, it searches the document knowledge base -- thirteen Romanian financial PDFs.
+> If you ask for a live rate, it goes to the web for current data.
+> If you ask about your goals, it reads or creates them in the database.
+> If you upload your bank statement, it categorizes your spending locally and suggests where you can save.
 >
-> It also uses memory to keep context, and a privacy-first transaction flow where raw data stays local and only anonymized insights are shared.
+> It also remembers your context across conversations.
+> And it works in both Romanian and English.
 >
 > So the product is not just a chatbot - it is an assistant that guides decisions end to end."
 
@@ -83,7 +87,7 @@
 
 ## Slide 6: Demo (3-4 min)
 
-> "Enough slides — let me show you how it actually works."
+> "Enough slides. Let me show you how it works."
 
 **→ Switch to the app (have it already open in another tab)**
 
@@ -91,35 +95,31 @@
 
 **1. RAG — Financial Knowledge (~1 min)**
 
-- Type: *"Ce este TEZAUR?"*
-- While it loads, say: *"This goes to the document tool for Romanian financial knowledge."*
-- Point out:
-  - *"The answer is simple and source-grounded."*
-  - *"For investment topics, compliance disclaimer appears automatically."*
+- Type: *"What is TEZAUR?"*
+- While it loads, say: *"This goes to the document tool. It searches Romanian financial PDFs."*
+- When result appears: *"The answer is clear and simple. You can see the sources it used. And because this is about investing, a compliance disclaimer shows up automatically."*
 
 **2. Market — Live Data (~45 sec)**
 
-- Type: *"Care este cursul EUR/RON astazi?"*
-- While it loads: *"Now it routes to live market search, not the PDF knowledge base."*
-- Point out:
-  - *"This is current data, not static content."*
+- Type: *"What is the EUR/RON exchange rate today?"*
+- While it loads: *"Now it routes to a different tool -- live market search. Not the PDF knowledge base."*
+- When result appears: *"This is today's data, not something static."*
 
 **3. Goals — Create & Track (~45 sec)**
 
-- Type: *"Creeaza un obiectiv de 50000 RON pentru o masina"*
-- Point out:
-  - *"The app stores the goal and uses it in future conversations."*
-- Optional: *"Care sunt obiectivele mele financiare?"*
+- Type: *"Create a goal of 50000 RON for a car"*
+- When result appears: *"The app saved this goal. It will use it in future conversations to give better advice."*
+- Optional: *"What are my financial goals?"*
 
 **4. Transactions — Spending Insights (~1 min)**
 
 - Upload a sample CSV bank statement
-- While processing: *"Transactions are categorized locally, and raw data stays private."*
+- While processing: *"Transactions are categorized by a local model. Raw data stays private -- it never goes to OpenAI."*
 - Type: *"Where can I save money?"*
-  - *"The app gives practical saving suggestions by spending category."*
-  - *"It uses categories, not raw sensitive details."*
+  - *"It gives saving tips by category -- like fees, shopping, transport."*
+  - *"It uses categories, not your raw transaction details."*
 
-> "In one conversation, the app answered knowledge questions, fetched live data, used personal goals, and gave privacy-preserving spending advice."
+> "So in one conversation, the app answered knowledge questions, got live data, created a personal goal, and gave private spending advice. That is the full flow."
 
 **→ Switch back to slides, Click Next**
 
@@ -127,16 +127,18 @@
 
 ## Slide 7: Architecture (1.5 min)
 
-> "Architecture is simple to explain.
+> "The architecture is simple.
 >
-> Frontend sends user messages to a FastAPI backend.
-> A supervisor agent routes each message to the right capability: documents, market data, goals, or savings insights.
+> The frontend sends messages to a FastAPI backend.
+> A supervisor agent decides which tool to use: documents, market data, goals, or spending insights.
 >
-> Data is stored in PostgreSQL and Qdrant.
+> Data lives in PostgreSQL and Qdrant for vector search.
 > Live data comes from Tavily.
-> Transaction categorization can run locally with Ollama for privacy.
+> Transaction categorization runs locally with Ollama and Mistral, so your data stays on your machine.
 >
-> So the system is modular, practical, and ready for real usage."
+> For deployment, the frontend runs on Vercel, the backend and database on Railway, and vector search on Qdrant Cloud. I also use LangSmith for tracing and monitoring.
+>
+> The system is modular, easy to extend, and ready for real use."
 
 **→ Click Next**
 
@@ -146,13 +148,13 @@
 
 > "To wrap up:
 >
-> **What we built**: an AI assistant for Romanian investors that combines financial knowledge, live market context, personal goals, and spending insights.
+> **What I built**: an AI assistant for Romanian investors that combines financial knowledge, live market context, personal goals, and spending insights.
 >
 > **What users get**: faster understanding, clearer decisions, and practical next steps in one app.
 >
 > **What matters most**: useful answers, trust, and privacy.
 >
-> **Roadmap**: improve personalization, expand financial document coverage, and move toward production partnerships."
+> **Roadmap**: I want to improve personalization, expand financial document coverage, and move toward production partnerships."
 
 **→ Click Next**
 
@@ -160,7 +162,7 @@
 
 ## Slide 9: Thank You (15 sec)
 
-> "Thank you! I hope this showed how BaniWise makes investing simpler, more personal, and more trustworthy for Romanian users."
+> "Thank you! I hope this showed how BaniWise can make investing simpler, more personal, and more trustworthy -- starting with Romanian users, and in the future, maybe for you too."
 
 ---
 
