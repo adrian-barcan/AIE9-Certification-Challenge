@@ -20,13 +20,13 @@
 
 > "Let's talk about the problem.
 >
-> First -- financial literacy in Romania is very low. We are one of the lowest in Europe. A person who wants to invest has to read hundred-page PDFs just to understand basic products like TEZAUR.
+> First -- financial literacy in Romania is still low. Many people want to invest, but they do not know where to start.
 >
-> Second -- information is everywhere. TEZAUR details are on one website, FIDELIS on another, tax rules in the Fiscal Code. There is no single place that brings it all together.
+> Second -- information is everywhere. Government bonds, ETFs, mutual funds, stocks, and options are explained in different places, with different language and different rules. There is no single place that puts everything together in a simple way.
 >
-> Third -- there is no personal guidance. Generic AI tools can give you general answers, but they do not know the details of current TEZAUR rates, they cannot track your goals, and they cannot safely analyze your bank statements. And most people do not feel comfortable uploading their spending data to a cloud AI.
+> Third -- there is no personal guidance. Generic AI tools can give general answers, but they do not know your goals, your risk level, or your spending habits. And most people do not feel comfortable uploading bank data to a cloud AI.
 >
-> The result? People leave their money in low-interest bank deposits because finding better options feels too hard."
+> The result is simple: many people delay investing, or keep money in low-interest deposits, because comparing options feels too hard."
 
 **→ Click Next**
 
@@ -34,14 +34,14 @@
 
 ## Slide 3: Success (1 min)
 
-> "For this project, success is **user success**.
+> "For this project, success means **user success**.
 >
 > Before BaniWise, users were in a reactive loop: search, compare, guess.
 > With BaniWise, they get a proactive flow: ask, understand, act.
 >
-> Users get clear answers quickly, instead of reading dense documents.
+> They can compare options like government bonds, ETFs, mutual funds, stocks, and options in one place.
 >
-> Users get practical next steps: understand products, compare options, create goals, and improve spending.
+> Users get practical next steps: create goals, track progress, and improve spending.
 >
 > Users also get safer guidance, with source-grounded answers and compliance-aware responses."
 
