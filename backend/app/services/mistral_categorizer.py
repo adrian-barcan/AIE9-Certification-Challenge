@@ -106,7 +106,7 @@ def _build_rules(category: str, patterns: tuple[str, ...], start_priority: int) 
 
 
 RULE_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("SUBSCRIPTION", ("netflix", "spotify", "youtube", "orange", "yoxo", "digi", "vodafone", "abonament", "subscription")),
+    ("SUBSCRIPTION", ("netflix", "spotify", "youtube", "orange", "yoxo", "digi", "vodafone", "fitpass", "abonament", "subscription")),
     ("PUBLIC_TRANSPORT", ("abonament stb", "abonament ratb", "stb", "ratb", "metro", "tramvai", "tram", "autobuz", "bus ", "cfr", "train", "tren")),
     ("GROCERIES", ("kaufland", "lidl", "carrefour", "mega image", "penny", "groceries")),
     ("DINING", ("restaurant", "mcdonald", "kfc", "pizza", "wolt", "tazz", "glovo", "cafe", "cafelier", "bistro", "food", "dining")),
@@ -115,15 +115,15 @@ RULE_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("PARKING_AND_TOLLS", ("parcare", "parking", "amparcat", "e-parking", "rovinieta", "toll", "vignette")),
     ("CAR_MAINTENANCE", ("service auto", "reparatii auto", "anvelope", "tires", "mechanic", "auto spa", "spalatorie")),
     ("OTHER_TRANSPORT", ("transport",)),
-    ("ATM_FEE", ("retragere atm", "atm fee", "atm", "cash withdrawal")),
+    ("ATM_FEE", ("comision atm", "taxa atm", "atm fee")),
     ("TRANSFER_FEE", ("comision transfer", "transfer fee")),
-    ("CARD_FEE", ("emisie card", "administrare card", "card")),
+    ("CARD_FEE", ("emisie card", "administrare card", "comision card", "taxa card")),
     ("OVERDRAFT_FEE", ("descoperit", "overdraft")),
     ("LOAN_INTEREST_FEE", ("dobanda credit", "dobanda", "interest")),
     ("FOREIGN_EXCHANGE_FEE", ("schimb valutar", "curs valutar", "fx")),
-    ("ACCOUNT_MAINTENANCE_FEE", ("cont administrare", "account fee", "maintenance fee", "brd", "bcr", "raiffeisen", "banca")),
+    ("ACCOUNT_MAINTENANCE_FEE", ("cont administrare", "administrare cont", "account maintenance fee", "monthly account fee")),
     ("OTHER_FEE", ("comision", "commission", "taxa", "fee")),
-    ("UTILITIES", ("electric", "gaz", "apa", "enel", "e-on", "utilities")),
+    ("UTILITIES", ("electric", "electrica", "gaz", "apa nova", "enel", "e-on", "utilitati", "utilities")),
     ("ELECTRONICS_SHOPPING", ("emag", "altex", "mediagalaxy", "cel", "laptop", "telefon", "phone", "tv", "electronics")),
     ("CLOTHING_SHOPPING", ("zara", "h&m", "h.m", "c&a", "decathlon", "fashion", "clothing", "haine", "incaltaminte")),
     ("HOME_GARDEN_SHOPPING", ("ikea", "dedeman", "jumbo", "leroy merlin", "mobila", "furniture")),
@@ -133,7 +133,7 @@ RULE_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("DOCTOR_AND_CLINIC", ("doctor", "medic", "clinica", "spital", "hospital", "analize")),
     ("DENTAL_HEALTH", ("dentist", "stomatologie", "dental", "dentar")),
     ("OPTICS_HEALTH", ("optician", "ochelari", "lentile", "lenses")),
-    ("HEALTH_INSURANCE", ("asigurare medicala", "health insurance", "cas")),
+    ("HEALTH_INSURANCE", ("asigurare medicala", "asigurare sanatate", "health insurance")),
     ("SALARY_INCOME", ("salariu", "salary")),
     ("INVESTMENT", ("tradeville", "alimentare bvb", "retragere d8ds", "fond", "broker", "invest", "brk")),
     ("OTHER_HEALTH", ("health",)),
@@ -157,16 +157,17 @@ def apply_high_priority_transfer_income_rules(signal: TransactionSignal) -> str 
     text = signal.normalized_text
     tx_type = signal.inferred_type
 
-    if (
-        "incasare" in text
-        and tx_type == "credit"
-        and ("plata catre alta banca" in text or "ordonator:" in text or "din contul:" in text)
-    ):
-        if "tradeville" in text or "bvb" in text or "invest" in text:
-            return "INVESTMENT"
+    if tx_type == "credit":
         if "salariu" in text or "salary" in text:
             return "SALARY_INCOME"
-        return "INTERNAL_TRANSFER"
+        if "tradeville" in text or "bvb" in text or "invest" in text:
+            return "INVESTMENT"
+        if "incasare" in text:
+            if "plata catre alta banca" in text or "ordonator:" in text or "din contul:" in text:
+                return "INTERNAL_TRANSFER"
+            return "OTHER_INCOME"
+        if "refund" in text or "storno" in text:
+            return "OTHER_INCOME"
 
     if "transfer home'bank" in text and tx_type == "debit":
         if "tradeville" in text or "bvb" in text or "invest" in text:
@@ -227,6 +228,9 @@ class RuleCategorizer:
             return high_priority_category
         keyword_category = match_keyword_rules(signal.normalized_text)
         if keyword_category is not None:
+            # Guard against fee-like false positives on inflows (e.g. refund card -> CARD_FEE).
+            if signal.inferred_type == "credit" and keyword_category.endswith("_FEE"):
+                return "OTHER_INCOME"
             return keyword_category
         return fallback_category_for_unmatched(signal)
 

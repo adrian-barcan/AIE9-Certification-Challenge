@@ -92,3 +92,30 @@ def test_categorize_batch_rule_fallback():
     categories, used_ollama = asyncio.run(categorize_batch(items))
     assert categories == ["INTERNAL_TRANSFER", "INVESTMENT"]
     assert used_ollama is False
+
+
+def test_rule_categorizer_refund_card_credit_not_fee():
+    signal = TransactionSignal(
+        description="Refund card - Operatiune recurenta",
+        amount=203.02,
+        tx_type="credit",
+    )
+    assert RuleCategorizer().categorize(signal) == "OTHER_INCOME"
+
+
+def test_rule_categorizer_incasare_transfer_credit_is_other_income():
+    signal = TransactionSignal(
+        description="Incasare transfer - Operatiune recurenta",
+        amount=1184.64,
+        tx_type="credit",
+    )
+    assert RuleCategorizer().categorize(signal) == "OTHER_INCOME"
+
+
+def test_rule_categorizer_incasare_chirie_not_utilities():
+    signal = TransactionSignal(
+        description="Incasare chirie apartament",
+        amount=2800.0,
+        tx_type="credit",
+    )
+    assert RuleCategorizer().categorize(signal) == "OTHER_INCOME"
